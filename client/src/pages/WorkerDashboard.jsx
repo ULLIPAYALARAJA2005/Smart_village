@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import "../styles/worker.css";
 import { useNavigate } from "react-router-dom";
 import { SkeletonBox } from "../components/Skeleton";
+import WorkerAssignmentCard from "../components/WorkerAssignmentCard";
+import { fetchMyAssignmentsAPI } from "../services/aiApi";
 import {
   PieChart, Pie, Cell, ResponsiveContainer,
   Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -41,6 +43,21 @@ export default function WorkerDashboard() {
   const [activeCategory, setActiveCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState({ electricity: [], water: [], garbage: [], drainage: [] });
+  const [myAssignments, setMyAssignments] = useState([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [assignmentFilter, setAssignmentFilter] = useState("active"); // "all" | "active" | "completed"
+
+  const loadAssignments = async () => {
+    try {
+      setLoadingAssignments(true);
+      const data = await fetchMyAssignmentsAPI();
+      setMyAssignments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn("Failed to load worker assignments:", err);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
 
   /* ── HELPERS ── */
   const openConfirm = (message, action) => setConfirmBox({ show: true, message, action });
@@ -63,6 +80,7 @@ export default function WorkerDashboard() {
   useEffect(() => {
     fetch("/api/auth/csrf/", { credentials: "same-origin" });
     setLoading(true);
+    loadAssignments();
     Promise.all([
       fetch("/api/issues/electricity/").then(r => r.json()),
       fetch("/api/issues/water/").then(r => r.json()),
@@ -151,6 +169,11 @@ export default function WorkerDashboard() {
                     activeCategory === "water" ? "💧" :
                       activeCategory === "garbage" ? "🗑" : "🚰"} {activeCategory.toUpperCase()}
                 </span>
+                {task.input_method && task.input_method !== 'manual' && (
+                  <span style={{ fontSize: '0.72rem', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 9999, padding: '2px 8px', fontWeight: 700 }}>
+                    {task.input_method === 'voice' ? '🎙️ Voice' : task.input_method === 'photo' ? '📸 Photo' : '🎙️+📸 AI'}
+                  </span>
+                )}
                 <span className={`task-status-pill ${task.status === "Assigned" ? "status-assigned" : "status-progress"}`}>
                   {task.status}
                 </span>
@@ -289,6 +312,103 @@ export default function WorkerDashboard() {
           <h2 className="wd-nav-title">Worker Dashboard</h2>
         </div>
         <button className="logout-btn" onClick={logout}>Logout</button>
+      </div>
+
+      {/* ── MY ASSIGNED WORKS & GPS SMART NAVIGATION ── */}
+      <div style={{ margin: "1.5rem 1rem", padding: "1.5rem", background: "#ffffff", borderRadius: "14px", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.3rem", color: "#1e293b", fontWeight: "700", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span>🧭</span> My Field Assignments & Smart Navigation
+            </h2>
+            <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+              Direct one-click Google Maps routing to complaint coordinates and field status updates
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.4rem", background: "#f1f5f9", padding: "0.25rem", borderRadius: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setAssignmentFilter("active")}
+              style={{
+                padding: "0.35rem 0.75rem",
+                borderRadius: "6px",
+                border: "none",
+                background: assignmentFilter === "active" ? "#2563eb" : "transparent",
+                color: assignmentFilter === "active" ? "#ffffff" : "#475569",
+                fontWeight: "600",
+                fontSize: "0.82rem",
+                cursor: "pointer",
+              }}
+            >
+              Active Works ({myAssignments.filter(a => !["Completed", "Verified", "Rejected"].includes(a.assignment?.work_status)).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAssignmentFilter("completed")}
+              style={{
+                padding: "0.35rem 0.75rem",
+                borderRadius: "6px",
+                border: "none",
+                background: assignmentFilter === "completed" ? "#2563eb" : "transparent",
+                color: assignmentFilter === "completed" ? "#ffffff" : "#475569",
+                fontWeight: "600",
+                fontSize: "0.82rem",
+                cursor: "pointer",
+              }}
+            >
+              Completed ({myAssignments.filter(a => ["Completed", "Verified"].includes(a.assignment?.work_status)).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAssignmentFilter("all")}
+              style={{
+                padding: "0.35rem 0.75rem",
+                borderRadius: "6px",
+                border: "none",
+                background: assignmentFilter === "all" ? "#2563eb" : "transparent",
+                color: assignmentFilter === "all" ? "#ffffff" : "#475569",
+                fontWeight: "600",
+                fontSize: "0.82rem",
+                cursor: "pointer",
+              }}
+            >
+              All ({myAssignments.length})
+            </button>
+          </div>
+        </div>
+
+        {loadingAssignments ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
+            {[1, 2].map((i) => (
+              <SkeletonBox key={i} height={180} />
+            ))}
+          </div>
+        ) : myAssignments.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "2rem", color: "#64748b", background: "#f8fafc", borderRadius: "10px" }}>
+            <span style={{ fontSize: "2rem", display: "block", marginBottom: "0.5rem" }}>👷</span>
+            <p style={{ margin: 0, fontWeight: "600" }}>No tasks assigned to you currently.</p>
+            <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem" }}>When an administrator assigns an issue to you, it will appear here with direct navigation.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "1rem" }}>
+            {myAssignments
+              .filter((item) => {
+                const status = item.assignment?.work_status;
+                if (assignmentFilter === "active") return !["Completed", "Verified", "Rejected"].includes(status);
+                if (assignmentFilter === "completed") return ["Completed", "Verified"].includes(status);
+                return true;
+              })
+              .map((item) => (
+                <WorkerAssignmentCard
+                  key={item.id}
+                  item={item}
+                  onUpdate={loadAssignments}
+                  showToast={showPopup}
+                />
+              ))}
+          </div>
+        )}
       </div>
 
       {/* ── STATISTICS ── */}

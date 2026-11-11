@@ -26,6 +26,8 @@ urlpatterns = [
     path("api/admin/", include("admin_panel.urls")),
     path("api/issues/", include("issues.urls")),
     path("api/feedback/", include("feedbacks.urls")),
+    path("api/ai/", include("ai_services.urls")),
+    path("api/announcements/", include("announcements.urls")),
 ]
 
 urlpatterns += static(
