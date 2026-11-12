@@ -71,13 +71,14 @@ export default function Login() {
     try {
 
       // Get CSRF cookie first
-      await fetch("/api/auth/csrf/");
+      await fetch("/api/auth/csrf/", { credentials: "include" });
 
       const csrfToken = getCookie("csrftoken");
 
       const response = await fetch("/api/auth/login/", {
 
         method: "POST",
+        credentials: "include",
 
         headers: {
           "Content-Type": "application/json",

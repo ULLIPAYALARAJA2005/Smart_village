@@ -9,7 +9,7 @@
       "destination": "https://smartvillage-api-tjih.onrender.com/media/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|media/).*)",
       "destination": "/index.html"
     }
   ]

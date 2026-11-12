@@ -102,12 +102,13 @@ export default function Signup() {
     try {
 
       // Get CSRF cookie first
-      await fetch("/api/auth/csrf/");
+      await fetch("/api/auth/csrf/", { credentials: "include" });
 
       const csrfToken = getCookie("csrftoken");
 
       const res = await fetch("/api/auth/signup/", {
         method: "POST",
+        credentials: "include",
 
         headers: {
           "Content-Type": "application/json",
