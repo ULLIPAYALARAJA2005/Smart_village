@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import "./styles/responsive.css";
 import "./styles/theme.css";
 import "./styles/animations.css";
 

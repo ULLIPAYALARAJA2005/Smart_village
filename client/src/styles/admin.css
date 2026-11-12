@@ -2114,3 +2114,17 @@
     margin-top: 8px;
   }
 }
+/* Fix for Mobile Admin Viewports (320px - 480px) */
+@media (max-width: 480px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .admin-complaints-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .admin-table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}

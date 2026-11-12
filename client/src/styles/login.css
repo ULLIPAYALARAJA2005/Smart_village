@@ -175,3 +175,20 @@
   cursor: not-allowed;
   transform: none;
 }
+@media (max-width: 480px) {
+  .login-card {
+    width: 95% !important;
+    padding: 24px 16px !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .login-card {
+    padding: 18px 12px !important;
+  }
+  .login-title {
+    font-size: 1.3rem !important;
+  }
+}

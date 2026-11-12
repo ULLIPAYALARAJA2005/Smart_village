@@ -397,3 +397,39 @@
   border: 1px solid #a7f3d0;
 }
 
+
+/* Responsive Media Queries for Voice Recording & Status Modals */
+@media (max-width: 600px) {
+  .voice-modal-content,
+  .voice-recorder-card {
+    width: 95% !important;
+    max-width: 100% !important;
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+  .voice-lang-selector {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
+  }
+  .voice-lang-pill {
+    padding: 6px 14px !important;
+    font-size: 0.85rem !important;
+  }
+  .voice-waveform-canvas {
+    width: 100% !important;
+    max-width: 280px !important;
+    height: 60px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .voice-modal-content,
+  .voice-recorder-card {
+    padding: 12px !important;
+  }
+  .voice-action-btn {
+    padding: 8px 12px !important;
+    font-size: 0.8rem !important;
+  }
+}

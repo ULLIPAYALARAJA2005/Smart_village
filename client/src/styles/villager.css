@@ -1638,4 +1638,19 @@ body {
   .mi2-step-line  { top: 11px; }
   .mi2-step-wrap  { min-width: 40px; }
 }
-
+
+/* Fix for Ultra-small Mobile Screens (320px - 480px) */
+@media (max-width: 480px) {
+  .issues-grid, 
+  .complaints-grid, 
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .form-row-2col {
+    grid-template-columns: 1fr !important;
+  }
+  .villager-tab-btn {
+    padding: 10px 14px !important;
+    font-size: 0.85rem !important;
+  }
+}

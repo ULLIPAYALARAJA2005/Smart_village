@@ -169,3 +169,19 @@
     grid-template-columns:1fr;
   }
 }
+@media (max-width: 480px) {
+  .signup-card {
+    width: 95% !important;
+    padding: 24px 16px !important;
+    border-radius: 16px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .signup-card {
+    padding: 18px 12px !important;
+  }
+  .signup-title {
+    font-size: 1.3rem !important;
+  }
+}

@@ -1032,3 +1032,21 @@
   animation: toastSlide 0.4s ease;
   z-index: 9999;
 }
+/* Fix for Mobile Worker Viewports (320px - 480px) */
+@media (max-width: 480px) {
+  .wd-task-list-container {
+    padding: 8px !important;
+  }
+  .worker-assignment-card {
+    padding: 14px !important;
+  }
+  .worker-assignment-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .worker-assignment-actions button,
+  .worker-assignment-actions a {
+    width: 100% !important;
+    text-align: center !important;
+  }
+}
