@@ -147,23 +147,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ---------------------------------------------------------------------------
 # CORS  (allow React dev-server and production frontend)
 # ---------------------------------------------------------------------------
-_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
-if _cors_env.strip() == '*' or os.getenv('CORS_ALLOW_ALL_ORIGINS', '').lower() in ('true', '1'):
+_cors_env = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://localhost:5174,http://localhost:5175,'
+    'http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175,'
+    'http://localhost:3000'
+)
+if _cors_env.strip() == '*':
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOWED_ORIGINS = []
-elif _cors_env.strip():
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip() and o.strip() != '*']
-    CORS_ALLOW_ALL_ORIGINS = False
 else:
-    CORS_ALLOWED_ORIGINS = [
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:5175',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-        'http://127.0.0.1:5175',
-        'http://localhost:3000',
-    ]
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip() and o.strip() != '*']
     CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOW_CREDENTIALS = True
