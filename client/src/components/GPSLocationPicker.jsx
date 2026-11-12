@@ -1,502 +1,688 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet's default marker icon paths in bundled Vite environments
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+// Clean custom SVG & CSS-based markers that work reliably across all browsers and devices
+const createGpsDotIcon = () =>
+  L.divIcon({
+    className: "sv-gps-dot-icon",
+    html: `
+      <div style="
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #2563eb;
+        border: 3px solid #ffffff;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4), 0 2px 6px rgba(0,0,0,0.3);
+      "></div>
+    `,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
 
-// Default village / campus coordinates: RGUKT RK Valley, Idupulapaya, Vempalli Mandal, Kadapa District
-const IDUPULAPAYA_COORDS = [14.3353, 78.5855];
-const IDUPULAPAYA_NAME = "ఇడుపులపాయ / RK Valley (Idupulapaya, Vempalli Mandal, YSR Kadapa District)";
+const createComplaintPinIcon = (isManual = false) =>
+  L.divIcon({
+    className: "sv-complaint-pin-icon",
+    html: `
+      <div style="
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translate(-50%, -100%);
+      ">
+        <div style="
+          background: ${isManual ? "#ea580c" : "#dc2626"};
+          color: #ffffff;
+          padding: 6px 10px;
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 11px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+          white-space: nowrap;
+          border: 2px solid #ffffff;
+          margin-bottom: 2px;
+        ">
+          ${isManual ? "📍 Complaint Spot (Manual)" : "📍 Complaint Spot (GPS)"}
+        </div>
+        <div style="
+          width: 24px;
+          height: 24px;
+          background: ${isManual ? "#ea580c" : "#dc2626"};
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid #ffffff;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        "></div>
+      </div>
+    `,
+    iconSize: [30, 42],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -42],
+  });
 
-// Component to smoothly pan the map to coordinates
-function MapCenterController({ center }) {
+// Component to smoothly fly/pan the map to newly detected or clicked coordinates
+function MapCenterController({ center, zoom = 17 }) {
   const map = useMap();
   useEffect(() => {
-    if (center) {
-      map.flyTo(center, 17, { duration: 1.2 });
+    if (center && Array.isArray(center) && center.length === 2 && !isNaN(center[0]) && !isNaN(center[1])) {
+      map.flyTo(center, zoom, { duration: 1.5, easeLinearity: 0.25 });
     }
-  }, [center, map]);
+  }, [center, zoom, map]);
   return null;
 }
 
-// Allow villager to tap anywhere on map to drop or adjust the pin
+// Allows the user to click anywhere on the map to set or fine-tune complaint location
 function MapClickHandler({ onMapClick }) {
   useMapEvents({
     click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      if (e && e.latlng) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
     },
   });
   return null;
 }
 
 export default function GPSLocationPicker({ onLocationChange }) {
-  const [status, setStatus] = useState("idle"); // idle | detecting | success | denied
-  const [coords, setCoords] = useState(null); // [lat, lng]
+  // State: "idle" | "detecting" | "success" | "error"
+  const [status, setStatus] = useState("idle");
+  // The actual live GPS coordinates returned by device: [lat, lng] or null
+  const [deviceGpsCoords, setDeviceGpsCoords] = useState(null);
+  // The final selected complaint coordinates (either GPS or manually adjusted): [lat, lng]
+  const [selectedCoords, setSelectedCoords] = useState(null);
+  // Actual accuracy in meters returned by device (never hardcoded)
   const [accuracy, setAccuracy] = useState(null);
-  const [secondsRemaining, setSecondsRemaining] = useState(5);
-  const [resolvedVillage, setResolvedVillage] = useState("");
-  const [isIspGatewayDetected, setIsIspGatewayDetected] = useState(false);
-  const timerRef = useRef(null);
-  const watchIdRef = useRef(null);
+  // Whether the location was GPS-detected or manually adjusted
+  const [locationSource, setLocationSource] = useState("none"); // "none" | "gps" | "manual"
+  // Friendly street/village/mandal address from reverse geocoding
+  const [resolvedAddress, setResolvedAddress] = useState("");
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+  // Detailed error message (bilingual)
+  const [errorMessage, setErrorMessage] = useState(null);
+  // Map tile style: "streets" (Google Maps-like clean road map with all labels) | "hybrid" (satellite + roads)
+  const [mapStyle, setMapStyle] = useState("streets");
 
+  // Keep a reference to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Notify parent component of valid coordinates
   const notifyParent = useCallback(
-    (lat, lng, acc, captured) => {
+    (lat, lng, acc, captured, source) => {
       if (onLocationChange) {
         onLocationChange({
           latitude: lat,
           longitude: lng,
           location_accuracy: acc,
           location_captured: captured,
+          location_source: source,
         });
       }
     },
     [onLocationChange]
   );
 
-  // Reverse geocode to display village/mandal name in simple words
-  const lookupVillageName = async (lat, lng) => {
-    // If coords are near Idupulapaya / RK Valley (within 5km), show Idupulapaya directly
-    const distToIdupulapaya =
-      Math.abs(lat - IDUPULAPAYA_COORDS[0]) + Math.abs(lng - IDUPULAPAYA_COORDS[1]);
-    if (distToIdupulapaya < 0.05) {
-      setResolvedVillage(IDUPULAPAYA_NAME);
-      setIsIspGatewayDetected(false);
-      return;
-    }
-
-    // Check if detected location is the college ISP network gateway in Ranga Reddy / Hyderabad (lat > 16.5)
-    if (lat > 16.5) {
-      setIsIspGatewayDetected(true);
-    } else {
-      setIsIspGatewayDetected(false);
-    }
-
+  // Reverse geocode via OpenStreetMap Nominatim for ANY real location
+  const lookupAddress = async (lat, lng) => {
+    if (isNaN(lat) || isNaN(lng)) return;
+    setIsResolvingAddress(true);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
-      if (res.ok) {
+      if (res.ok && isMountedRef.current) {
         const data = await res.json();
         if (data && data.display_name) {
-          const parts = data.display_name.split(",").map((s) => s.trim());
-          const shortName = parts.slice(0, 3).join(", ");
-          setResolvedVillage(shortName);
+          // Format readable address: Road / Landmark, Village / Suburb, Mandal / Town, District
+          const addr = data.address || {};
+          const road = addr.road || addr.pedestrian || addr.suburb || "";
+          const village = addr.village || addr.town || addr.hamlet || addr.neighbourhood || addr.city || "";
+          const county = addr.county || addr.state_district || "";
+          const state = addr.state || "";
+
+          const parts = [road, village, county, state].filter(Boolean);
+          const formatted = parts.length > 0 ? parts.join(", ") : data.display_name.split(",").slice(0, 3).join(", ");
+          setResolvedAddress(formatted);
         }
       }
     } catch {
-      // Ignore network errors silently
+      // Ignore network errors gracefully
+    } finally {
+      if (isMountedRef.current) {
+        setIsResolvingAddress(false);
+      }
     }
   };
 
-  // Set location directly to user's real village (Idupulapaya, Vempalli, Kadapa)
-  const setIdupulapayaLocation = () => {
-    const [lat, lng] = IDUPULAPAYA_COORDS;
-    setCoords([lat, lng]);
-    setAccuracy(5);
-    setStatus("success");
-    setResolvedVillage(IDUPULAPAYA_NAME);
-    setIsIspGatewayDetected(false);
-    notifyParent(lat, lng, 5, true);
-  };
+  // =========================================================================
+  // REAL-TIME CURRENT GPS DETECTION (Browser Geolocation API)
+  // =========================================================================
+  const detectLiveLocation = () => {
+    setErrorMessage(null);
 
-  // Dedicated Real-time GPS Detection
-  const detectLocation = () => {
+    // 1. Check if browser supports Geolocation
     if (!navigator.geolocation) {
-      setStatus("denied");
+      setStatus("error");
+      setErrorMessage({
+        en: "Geolocation is not supported by your browser. Please select your location manually on the map.",
+        te: "మీ బ్రౌజర్ స్థాన గుర్తింపుకు మద్దతు ఇవ్వదు. దయచేసి మ్యాప్‌లో మీ స్థానాన్ని మాన్యువల్‌గా ఎంచుకోండి.",
+      });
       return;
     }
 
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    // 2. Check for Secure Context (HTTPS or localhost)
+    if (typeof window !== "undefined" && window.isSecureContext === false && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      setStatus("error");
+      setErrorMessage({
+        en: "Location access requires a secure connection (HTTPS). Please open this website using HTTPS or click on the map to set your location.",
+        te: "స్థాన ప్రాప్యతకు సురక్షిత కనెక్షన్ (HTTPS) అవసరం. దయచేసి HTTPS ఉపయోగించండి లేదా మ్యాప్‌పై క్లిక్ చేసి స్థానాన్ని ఎంచుకోండి.",
+      });
+      return;
     }
 
     setStatus("detecting");
-    setSecondsRemaining(5);
 
-    let bestReading = null;
-
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!bestReading || pos.coords.accuracy < bestReading.coords.accuracy) {
-          bestReading = pos;
-        }
-      },
-      (err) => {
-        console.warn("GPS watch attempt note:", err?.message);
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 10000,
-      }
-    );
-    watchIdRef.current = watchId;
-
-    let remaining = 5;
-    timerRef.current = setInterval(() => {
-      remaining -= 1;
-      setSecondsRemaining(remaining);
-
-      if (remaining <= 0) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-
-        if (watchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-
-        if (bestReading) {
-          const lat = bestReading.coords.latitude;
-          const lng = bestReading.coords.longitude;
-          const acc = bestReading.coords.accuracy;
-          setCoords([lat, lng]);
-          setAccuracy(acc);
-          setStatus("success");
-          notifyParent(lat, lng, acc, true);
-          lookupVillageName(lat, lng);
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const lat = pos.coords.latitude;
-              const lng = pos.coords.longitude;
-              const acc = pos.coords.accuracy;
-              setCoords([lat, lng]);
-              setAccuracy(acc);
-              setStatus("success");
-              notifyParent(lat, lng, acc, true);
-              lookupVillageName(lat, lng);
-            },
-            (err) => {
-              console.warn("GPS fallback note:", err?.message);
-              setStatus("denied");
-              notifyParent(null, null, null, false);
-            },
-            { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
-          );
-        }
-      }
-    }, 1000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+    const geoOptions = {
+      enableHighAccuracy: true,
+      timeout: 30000, // 30 seconds as specified
+      maximumAge: 0,  // Force fresh reading from device GPS hardware
     };
-  }, []);
 
-  const handleMarkerMove = (lat, lng) => {
-    setCoords([lat, lng]);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (!isMountedRef.current) return;
+
+        const rawLat = position.coords.latitude;
+        const rawLng = position.coords.longitude;
+        const rawAcc = position.coords.accuracy;
+
+        // Strict validation: coordinates must be real valid numbers
+        if (typeof rawLat !== "number" || typeof rawLng !== "number" || isNaN(rawLat) || isNaN(rawLng)) {
+          setStatus("error");
+          setErrorMessage({
+            en: "Invalid coordinates received from device. Please retry or click on the map.",
+            te: "పరికరం నుండి అమాన్య సమన్వయాలు వచ్చాయి. దయచేసి మళ్లీ ప్రయత్నించండి లేదా మ్యాప్‌పై తాకండి.",
+          });
+          return;
+        }
+
+        // Validate latitude between -90 and 90, longitude between -180 and 180
+        if (rawLat < -90 || rawLat > 90 || rawLng < -180 || rawLng > 180) {
+          setStatus("error");
+          setErrorMessage({
+            en: "Coordinates out of bounds. Please click on the map.",
+            te: "సమన్వయాలు పరిధి వెలుపల ఉన్నాయి. దయచేసి మ్యాప్‌పై తాకండి.",
+          });
+          return;
+        }
+
+        const lat = parseFloat(rawLat.toFixed(6));
+        const lng = parseFloat(rawLng.toFixed(6));
+        const acc = rawAcc ? Math.round(rawAcc) : null;
+
+        setDeviceGpsCoords([lat, lng]);
+        setSelectedCoords([lat, lng]);
+        setAccuracy(acc);
+        setLocationSource("gps");
+        setStatus("success");
+        setErrorMessage(null);
+
+        // Notify parent with real device values
+        notifyParent(lat, lng, acc, true, "gps");
+
+        // Reverse geocode real location
+        lookupAddress(lat, lng);
+      },
+      (error) => {
+        if (!isMountedRef.current) return;
+
+        setStatus("error");
+
+        let errEn = "";
+        let errTe = "";
+
+        switch (error.code) {
+          case 1: // PERMISSION_DENIED
+            errEn = "Location permission denied. Please allow location access in your browser settings or select the location manually on the map.";
+            errTe = "స్థాన అనుమతి నిరాకరించబడింది. బ్రౌజర్ సెట్టింగ్స్‌లో అనుమతించండి లేదా మ్యాప్‌లో మీ స్థానాన్ని ఎంచుకోండి.";
+            break;
+          case 2: // POSITION_UNAVAILABLE
+            errEn = "Your current location could not be detected. Please check your GPS and try again.";
+            errTe = "మీ ప్రస్తుత స్థానాన్ని గుర్తించలేకపోయాము. దయచేసి GPS ఆన్ చేసి మళ్లీ ప్రయత్నించండి.";
+            break;
+          case 3: // TIMEOUT
+            errEn = "Location detection is taking too long. Please move to an open area and try again.";
+            errTe = "స్థాన గుర్తింపు ఎక్కువ సమయం తీసుకుంటోంది. దయచేసి బహిరంగ ప్రదేశంలోకి వెళ్లి మళ్లీ ప్రయత్నించండి.";
+            break;
+          default:
+            errEn = error.message || "An unexpected error occurred while detecting location.";
+            errTe = "స్థానాన్ని గుర్తించడంలో లోపం సంభవించింది. దయచేసి మ్యాప్‌పై తాకండి.";
+            break;
+        }
+
+        setErrorMessage({ en: errEn, te: errTe });
+      },
+      geoOptions
+    );
+  };
+
+  // =========================================================================
+  // MANUAL LOCATION ADJUSTMENT (Click on Map or Drag Marker)
+  // =========================================================================
+  const handleManualLocationChange = (rawLat, rawLng) => {
+    if (isNaN(rawLat) || isNaN(rawLng)) return;
+    const lat = parseFloat(rawLat.toFixed(6));
+    const lng = parseFloat(rawLng.toFixed(6));
+
+    setSelectedCoords([lat, lng]);
+    setLocationSource("manual");
     setStatus("success");
-    notifyParent(lat, lng, accuracy, true);
-    lookupVillageName(lat, lng);
+    setErrorMessage(null);
+
+    // When manually adjusted, save the new coordinates with source "manual"
+    notifyParent(lat, lng, accuracy, true, "manual");
+
+    // Lookup address for the newly chosen spot
+    lookupAddress(lat, lng);
   };
 
-  const handleClear = () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setCoords(null);
+  // Clear / Reset location
+  const handleClearLocation = () => {
+    setDeviceGpsCoords(null);
+    setSelectedCoords(null);
     setAccuracy(null);
+    setLocationSource("none");
     setStatus("idle");
-    setResolvedVillage("");
-    setIsIspGatewayDetected(false);
-    notifyParent(null, null, null, false);
+    setResolvedAddress("");
+    setErrorMessage(null);
+    notifyParent(null, null, null, false, "none");
   };
+
+  // Initial default map center if no coordinates detected yet:
+  // General Andhra Pradesh / India regional view at zoom 7 until user detects or clicks
+  const initialMapCenter = [16.5, 80.5];
+  const activeMapCenter = selectedCoords || deviceGpsCoords || initialMapCenter;
+  const activeMapZoom = selectedCoords ? 17 : 7;
 
   return (
     <div
       style={{
         margin: "1rem 0",
-        padding: "1.2rem",
+        padding: "1.25rem",
         background: "#ffffff",
-        borderRadius: "14px",
-        border: coords ? "2px solid #16a34a" : "2px solid #2563eb",
-        boxShadow: "0 4px 15px rgba(0, 0, 0, 0.06)",
+        borderRadius: "16px",
+        border: selectedCoords ? "2px solid #10b981" : "2px solid #0284c7",
+        boxShadow: "0 4px 20px rgba(10, 37, 64, 0.08)",
       }}
     >
-      {/* Title Label */}
-      <div style={{ marginBottom: "0.85rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "1.4rem" }}>📍</span>
+      {/* Header with Title & Instructions */}
+      <div style={{ marginBottom: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.3rem" }}>
+          <span style={{ fontSize: "1.5rem" }}>📍</span>
           <div>
-            <strong style={{ fontSize: "1.05rem", color: "#0f172a", display: "block" }}>
-              సమస్య ఉన్న స్థలాన్ని గుర్తించండి (Mark Problem Location)
+            <strong style={{ fontSize: "1.08rem", color: "#0a2540", display: "block" }}>
+              సమస్య ఉన్న స్థలాన్ని గుర్తించండి (Identify Problem Location)
             </strong>
             <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-              క్రింది బటన్ నొక్కగానే మీ ప్రస్తుత స్థానం స్వయంచాలకంగా నమోదవుతుంది
+              మీ నిజమైన ప్రస్తుత స్థానాన్ని గుర్తించడానికి క్రింది బటన్ నొక్కండి లేదా మ్యాప్‌పై తాకి ఎంచుకోండి
             </span>
           </div>
         </div>
       </div>
 
-      {/* QUICK 1-TOUCH BUTTON: My Village (Idupulapaya, RK Valley, Kadapa) */}
-      <div style={{ marginBottom: "0.75rem" }}>
+      {/* PRIMARY GPS DETECTION BUTTON */}
+      <div style={{ marginBottom: "0.85rem" }}>
         <button
           type="button"
-          onClick={setIdupulapayaLocation}
+          onClick={detectLiveLocation}
+          disabled={status === "detecting"}
           style={{
             width: "100%",
-            padding: "0.65rem 1rem",
-            background: "#eff6ff",
-            color: "#1d4ed8",
-            border: "1.5px dashed #3b82f6",
-            borderRadius: "10px",
-            fontSize: "0.92rem",
-            fontWeight: "700",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem",
-            transition: "all 0.2s",
-          }}
-        >
-          <span>🏫</span>
-          <span>ఇడుపులపాయ / RK Valley, కడప (Idupulapaya, Kadapa) కి సెట్ చేయండి</span>
-        </button>
-      </div>
-
-      {/* PRIMARY GPS DETECT BUTTON */}
-      {status !== "detecting" && (
-        <button
-          type="button"
-          onClick={detectLocation}
-          style={{
-            width: "100%",
-            padding: "0.9rem 1.25rem",
-            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+            padding: "0.95rem 1.4rem",
+            background: status === "detecting" ? "#94a3b8" : "linear-gradient(135deg, #0a2540 0%, #0284c7 100%)",
             color: "#ffffff",
             border: "none",
             borderRadius: "12px",
-            fontSize: "1rem",
+            fontSize: "1.02rem",
             fontWeight: "700",
-            cursor: "pointer",
+            cursor: status === "detecting" ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: "0.6rem",
-            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.35)",
-            marginBottom: "0.75rem",
+            gap: "0.75rem",
+            boxShadow: "0 4px 14px rgba(2, 132, 199, 0.3)",
+            transition: "all 0.25s ease",
           }}
         >
-          <span style={{ fontSize: "1.4rem" }}>🎯</span>
-          <div>
-            <div>{coords ? "మళ్ళీ GPS గుర్తించు (Re-detect Live GPS)" : "నా స్థానాన్ని గుర్తించు (Detect My Location)"}</div>
-          </div>
+          {status === "detecting" ? (
+            <>
+              <span style={{ fontSize: "1.3rem", display: "inline-block", animation: "spin 1s linear infinite" }}>🔄</span>
+              <span>Detecting your current location... (మీ ప్రస్తుత స్థానాన్ని గుర్తిస్తున్నాము...)</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: "1.3rem" }}>📍</span>
+              <span>
+                {selectedCoords
+                  ? "మళ్ళీ నా ప్రస్తుత స్థానాన్ని గుర్తించండి (Re-detect Current GPS)"
+                  : "నా ప్రస్తుత స్థానాన్ని గుర్తించండి (Get My Current Location)"}
+              </span>
+            </>
+          )}
         </button>
-      )}
+      </div>
 
-      {/* RECORDING / SATELLITE ACQUISITION TIMER STATE */}
-      {status === "detecting" && (
+      {/* ERROR NOTICE (Permission Denied, Timeout, Unavailable) */}
+      {status === "error" && errorMessage && (
         <div
           style={{
-            background: "#eff6ff",
-            border: "2px solid #93c5fd",
+            background: "#fef2f2",
+            border: "1.5px solid #f87171",
             borderRadius: "12px",
-            padding: "1.2rem",
-            textAlign: "center",
-            marginBottom: "0.75rem",
+            padding: "1rem",
+            marginBottom: "1rem",
+            color: "#991b1b",
           }}
         >
-          <div style={{ fontSize: "2rem", animation: "pulse 1s infinite" }}>📡</div>
-          <h4 style={{ margin: "0.4rem 0", color: "#1e40af", fontSize: "1.05rem" }}>
-            మీ ప్రస్తుత స్థానాన్ని రికార్డ్ చేస్తున్నాము...
-          </h4>
-          <p style={{ margin: "0 0 0.75rem", color: "#475569", fontSize: "0.85rem" }}>
-            దయచేసి వేచి ఉండండి: <strong>{secondsRemaining}</strong> సెకన్లు (Recording real-time GPS...)
-          </p>
-          <div
-            style={{
-              width: "100%",
-              height: "10px",
-              background: "#dbeafe",
-              borderRadius: "999px",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${((5 - secondsRemaining) / 5) * 100}%`,
-                height: "100%",
-                background: "#2563eb",
-                transition: "width 1s linear",
-              }}
-            />
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+            <span style={{ fontSize: "1.3rem" }}>⚠️</span>
+            <div>
+              <strong style={{ fontSize: "0.95rem", display: "block", marginBottom: "0.25rem" }}>
+                స్థాన గుర్తింపు లోపం (Location Notice)
+              </strong>
+              <p style={{ margin: "0 0 0.4rem 0", fontSize: "0.88rem", lineHeight: 1.45 }}>
+                {errorMessage.te}
+              </p>
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "#b91c1c" }}>
+                {errorMessage.en}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ISP GATEWAY NOTICE (When computer is on college network routed through Munaganur / Ranga Reddy) */}
-      {isIspGatewayDetected && (
+      {/* SUCCESS CARD: Display real coordinates, accuracy, and source */}
+      {status === "success" && selectedCoords && (
         <div
           style={{
-            background: "#fef3c7",
-            border: "1.5px solid #f59e0b",
-            borderRadius: "10px",
-            padding: "0.85rem 1rem",
-            marginBottom: "0.75rem",
+            background: locationSource === "manual" ? "#fffbeb" : "#f0fdf4",
+            border: locationSource === "manual" ? "1.5px solid #fde68a" : "1.5px solid #a7f3d0",
+            borderRadius: "12px",
+            padding: "1rem 1.15rem",
+            marginBottom: "1rem",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
           }}
         >
-          <div style={{ color: "#92400e", fontWeight: "700", fontSize: "0.9rem", marginBottom: "0.3rem" }}>
-            ⚠️ కాలేజ్ ఇంటర్నెట్ రౌటర్ స్థానం (Munaganur, Ranga Reddy)
-          </div>
-          <p style={{ margin: "0 0 0.6rem", color: "#78350f", fontSize: "0.82rem", lineHeight: 1.4 }}>
-            మీ కంప్యూటర్ నెట్‌వర్క్ గేట్‌వే హైదరాబాద్/మునగనూరు వద్ద ఉంది. మీరు <strong>ఇడుపులపాయ (RK Valley, కడప)</strong> లో ఉంటే, క్రింది బటన్ నొక్కండి:
-          </p>
-          <button
-            type="button"
-            onClick={setIdupulapayaLocation}
-            style={{
-              padding: "0.5rem 1rem",
-              background: "#d97706",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: "700",
-              fontSize: "0.85rem",
-              cursor: "pointer",
-            }}
-          >
-            📍 ఇడుపులపాయ / RK Valley కి మార్చండి (Switch to Idupulapaya)
-          </button>
-        </div>
-      )}
-
-      {/* SUCCESS CONFIRMATION BOX */}
-      {status === "success" && coords && (
-        <div style={{ marginBottom: "0.85rem" }}>
-          <div
-            style={{
-              background: "#f0fdf4",
-              border: "1.5px solid #86efac",
-              borderRadius: "12px",
-              padding: "0.9rem 1rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.6rem" }}>
             <div>
-              <div style={{ color: "#166534", fontWeight: "700", fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <span>✅</span> ప్రస్తుత స్థానం రికార్డ్ చేయబడింది! (Location Recorded)
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
+                <span style={{ fontSize: "1.1rem" }}>{locationSource === "manual" ? "📍" : "✅"}</span>
+                <strong style={{ fontSize: "0.98rem", color: locationSource === "manual" ? "#92400e" : "#065f46" }}>
+                  {locationSource === "manual"
+                    ? "మ్యాప్‌లో సర్దుబాటు చేసిన ఫిర్యాదు స్థానం (Manually Adjusted Location)"
+                    : "ప్రస్తుత స్థానం విజయవంతంగా గుర్తించబడింది! (Live GPS Location Detected)"}
+                </strong>
               </div>
-              {resolvedVillage && (
-                <div style={{ fontSize: "0.88rem", color: "#15803d", fontWeight: "600", marginTop: "0.25rem" }}>
-                  📍 {resolvedVillage}
+
+              {/* Resolved Address / Village Name */}
+              {isResolvingAddress ? (
+                <div style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.2rem 0" }}>
+                  🔍 చిరునామాను గుర్తిస్తున్నాము (Looking up village / street name...)...
+                </div>
+              ) : resolvedAddress ? (
+                <div style={{ fontSize: "0.92rem", color: "#0f172a", fontWeight: "600", margin: "0.25rem 0" }}>
+                  🏡 {resolvedAddress}
+                </div>
+              ) : null}
+
+              {/* Exact Coordinates & Device Accuracy */}
+              <div style={{ fontSize: "0.82rem", color: "#475569", marginTop: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.8rem" }}>
+                <span>
+                  <strong>అక్షాంశం (Lat):</strong> {selectedCoords[0].toFixed(6)}
+                </span>
+                <span>
+                  <strong>రేఖాంశం (Lng):</strong> {selectedCoords[1].toFixed(6)}
+                </span>
+                {accuracy && locationSource === "gps" && (
+                  <span style={{ color: accuracy > 100 ? "#b45309" : "#047857", fontWeight: "600" }}>
+                    • GPS ఖచ్చితత్వం: ±{accuracy} మీటర్లు (metres)
+                  </span>
+                )}
+              </div>
+
+              {/* High Accuracy Warning Notice */}
+              {accuracy && accuracy > 100 && locationSource === "gps" && (
+                <div style={{ fontSize: "0.8rem", color: "#b45309", marginTop: "0.4rem", background: "#fef3c7", padding: "4px 8px", borderRadius: "6px" }}>
+                  ⚠️ GPS ఖచ్చితత్వం ±{accuracy}m గా ఉంది. మీరు సమస్య ఉన్న ఖచ్చితమైన స్థలం కోసం మ్యాప్‌పై తాకి పిన్‌ను జరపవచ్చు.
                 </div>
               )}
-              <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.2rem" }}>
-                అక్షాంశం (Lat): {coords[0].toFixed(6)}, రేఖాంశం (Lng): {coords[1].toFixed(6)}
-                {accuracy && <span> • ఖచ్చితత్వం: ±{Math.round(accuracy)}m</span>}
-              </div>
             </div>
 
-            <div>
-              <button
-                type="button"
-                onClick={handleClear}
-                style={{
-                  padding: "0.45rem 0.85rem",
-                  background: "#fee2e2",
-                  color: "#991b1b",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "0.82rem",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                }}
-              >
-                ✕ తొలగించు
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleClearLocation}
+              style={{
+                padding: "0.45rem 0.85rem",
+                background: "#fee2e2",
+                color: "#991b1b",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "0.82rem",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+              title="స్థానాన్ని తొలగించండి"
+            >
+              ✕ తొలగించు (Clear)
+            </button>
           </div>
         </div>
       )}
 
-      {/* SATELLITE MAP VISUALIZATION - Centered on Idupulapaya / RK Valley */}
-      <div style={{ marginTop: "0.75rem" }}>
-        <div style={{ fontSize: "0.82rem", color: "#475569", marginBottom: "0.4rem", display: "flex", justifyContent: "space-between" }}>
-          <span>
-            🛰️ <strong>ఇడుపులపాయ / RK Valley శాటిలైట్ మ్యాప్:</strong>
-          </span>
-          <span style={{ color: "#64748b" }}>
-            మ్యాప్‌పై తాకి పిన్‌ను సరిగ్గా ఉంచవచ్చు (Tap map to move pin)
-          </span>
-        </div>
+      {/* MAP CONTROLS & INSTRUCTIONS BAR */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.5rem",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
+        <span style={{ fontSize: "0.82rem", color: "#334155", fontWeight: "600" }}>
+          🗺️ మ్యాప్‌పై తాకి పిన్‌ను ఎక్కడైనా ఉంచవచ్చు (Tap map or drag pin to adjust)
+        </span>
 
-        <div
-          style={{
-            height: "340px",
-            width: "100%",
-            borderRadius: "12px",
-            overflow: "hidden",
-            border: "2px solid #cbd5e1",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <MapContainer
-            center={coords || IDUPULAPAYA_COORDS}
-            zoom={coords ? 17 : 16}
-            scrollWheelZoom={true}
-            style={{ height: "100%", width: "100%" }}
+        {/* Map Layer Switcher: Street (Google Maps-like) vs Satellite Hybrid */}
+        <div style={{ display: "inline-flex", background: "#f1f5f9", borderRadius: "8px", padding: "2px", border: "1px solid #cbd5e1" }}>
+          <button
+            type="button"
+            onClick={() => setMapStyle("streets")}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.78rem",
+              fontWeight: "700",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              background: mapStyle === "streets" ? "#0284c7" : "transparent",
+              color: mapStyle === "streets" ? "#ffffff" : "#475569",
+              transition: "all 0.2s",
+            }}
           >
-            {/* Esri World Imagery (Satellite Photos showing campus buildings, hostels, academic blocks, and roads) */}
-            <TileLayer
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              attribution='&copy; <a href="https://www.esri.com/">Esri Satellite</a>'
-              maxZoom={19}
-            />
-
-            {coords && <MapCenterController center={coords} />}
-
-            {coords && (
-              <Marker
-                position={coords}
-                draggable={true}
-                eventHandlers={{
-                  dragend: (e) => {
-                    const ll = e.target.getLatLng();
-                    handleMarkerMove(ll.lat, ll.lng);
-                  },
-                }}
-              />
-            )}
-
-            <MapClickHandler onMapClick={handleMarkerMove} />
-          </MapContainer>
+            🗺️ Street Map
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapStyle("hybrid")}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.78rem",
+              fontWeight: "700",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              background: mapStyle === "hybrid" ? "#0284c7" : "transparent",
+              color: mapStyle === "hybrid" ? "#ffffff" : "#475569",
+              transition: "all 0.2s",
+            }}
+          >
+            🛰️ Satellite + Roads
+          </button>
         </div>
       </div>
 
+      {/* LEAFLET MAP CONTAINER (Google Maps-like Street and Place Labels) */}
+      <div
+        style={{
+          height: "360px",
+          width: "100%",
+          borderRadius: "14px",
+          overflow: "hidden",
+          border: "2px solid #cbd5e1",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <MapContainer
+          center={activeMapCenter}
+          zoom={activeMapZoom}
+          scrollWheelZoom={true}
+          style={{ height: "100%", width: "100%" }}
+        >
+          {/* TILE LAYER 1: Clean, Highly Detailed Street Map with Villages, Streets, Temples, Schools (Google Maps style) */}
+          {mapStyle === "streets" ? (
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              maxZoom={19}
+            />
+          ) : (
+            <>
+              {/* TILE LAYER 2: Satellite Imagery */}
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+                maxZoom={19}
+              />
+              {/* Overlay with Road Names, Village Names, Landmarks, and Boundaries */}
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                attribution='&copy; <a href="https://www.esri.com/">Esri Labels</a>'
+                maxZoom={19}
+              />
+            </>
+          )}
+
+          {/* Smooth Fly-To / Auto-Zoom Controller */}
+          {selectedCoords && <MapCenterController center={selectedCoords} zoom={17} />}
+
+          {/* Real Device GPS Dot & Actual Accuracy Circle */}
+          {deviceGpsCoords && (
+            <>
+              <Marker position={deviceGpsCoords} icon={createGpsDotIcon()}>
+                <Popup>
+                  <div style={{ fontSize: "0.82rem", lineHeight: 1.4 }}>
+                    <strong>🔵 Your Device GPS Position</strong>
+                    <br />
+                    Lat: {deviceGpsCoords[0].toFixed(6)}
+                    <br />
+                    Lng: {deviceGpsCoords[1].toFixed(6)}
+                    {accuracy && (
+                      <div>Accuracy: ±{accuracy} metres</div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+
+              {accuracy && accuracy > 0 && accuracy < 1000 && (
+                <Circle
+                  center={deviceGpsCoords}
+                  radius={accuracy}
+                  pathOptions={{
+                    color: "#2563eb",
+                    fillColor: "#3b82f6",
+                    fillOpacity: 0.12,
+                    weight: 1.5,
+                  }}
+                />
+              )}
+            </>
+          )}
+
+          {/* Draggable Confirmed Complaint Pin */}
+          {selectedCoords && (
+            <Marker
+              position={selectedCoords}
+              icon={createComplaintPinIcon(locationSource === "manual")}
+              draggable={true}
+              eventHandlers={{
+                dragend: (e) => {
+                  const ll = e.target.getLatLng();
+                  handleManualLocationChange(ll.lat, ll.lng);
+                },
+              }}
+            >
+              <Popup>
+                <div style={{ fontSize: "0.85rem", lineHeight: 1.4 }}>
+                  <strong>📍 Confirmed Complaint Spot</strong>
+                  <br />
+                  <span>{resolvedAddress || "Selected Location"}</span>
+                  <br />
+                  <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                    Lat: {selectedCoords[0].toFixed(6)}, Lng: {selectedCoords[1].toFixed(6)}
+                  </span>
+                  <div style={{ marginTop: "4px", fontSize: "0.78rem", color: "#047857", fontWeight: "600" }}>
+                    ✓ Ready for complaint submission
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
+          {/* Click Handler to allow placing or moving marker anywhere */}
+          <MapClickHandler onMapClick={handleManualLocationChange} />
+        </MapContainer>
+      </div>
+
+      {/* Map Legend */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: "0.6rem",
+          fontSize: "0.78rem",
+          color: "#64748b",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#2563eb", display: "inline-block" }}></span>
+            <span>Real GPS Position</span>
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#dc2626", display: "inline-block" }}></span>
+            <span>Complaint Location</span>
+          </span>
+        </div>
+        <span>Drag the pin or tap the map to adjust precisely</span>
+      </div>
+
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.1); }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>

@@ -327,3 +327,31 @@
     opacity: 0.4;
   }
 }
+
+.language-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  color: #0052CC;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(0, 82, 204, 0.2);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s ease;
+}
+
+.language-toggle:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 82, 204, 0.2);
+}
+

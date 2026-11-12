@@ -11,12 +11,13 @@ import AdminFeedback from "./pages/AdminFeedback";
 import ScrollTop from "./components/ScrollTop";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/NotFoundPage";
+import { LanguageProvider } from "./context/LanguageContext";
 
 function App() {
 
   return (
 
-    <Router>
+    <LanguageProvider><Router>
 
       {/* 🔥 ADD HERE */}
       <ScrollTop />
@@ -80,6 +81,7 @@ function App() {
       </Routes>
 
     </Router>
+    </LanguageProvider>
 
   );
 }

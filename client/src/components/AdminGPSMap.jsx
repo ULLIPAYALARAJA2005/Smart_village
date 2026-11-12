@@ -54,8 +54,8 @@ export default function AdminGPSMap({ issues = [], onSelectIssue }) {
     return true;
   });
 
-  // Default village center: RGUKT RK Valley, Idupulapaya, Vempalli Mandal, Kadapa District
-  const defaultCenter = [14.3353, 78.5855];
+  // Default fallback center when no GPS issues exist
+  const defaultCenter = [16.5, 80.0];
   const center =
     filteredIssues.length > 0
       ? [parseFloat(filteredIssues[0].latitude), parseFloat(filteredIssues[0].longitude)]
