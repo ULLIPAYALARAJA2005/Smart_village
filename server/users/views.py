@@ -1,6 +1,7 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate, login, logout
@@ -13,10 +14,12 @@ from .serializers import RegisterSerializer
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def csrf_token(request):
-    return Response({"message": "CSRF cookie set"})
+    token = get_token(request)
+    return Response({"csrfToken": token, "message": "CSRF cookie set"})
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def register_user(request):
 
     serializer = RegisterSerializer(data=request.data)
@@ -40,6 +43,7 @@ def register_user(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def login_user(request):
 
     username = request.data.get("username")

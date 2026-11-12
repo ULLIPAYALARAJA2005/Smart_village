@@ -18,8 +18,11 @@ export default function Login() {
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // Get CSRF token from cookie
+  // Get CSRF token from cookie or storage
   function getCookie(name) {
+    const fromStorage = localStorage.getItem(name);
+    if (fromStorage) return fromStorage;
+
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
 
@@ -71,9 +74,13 @@ export default function Login() {
     try {
 
       // Get CSRF cookie first
-      await fetch("/api/auth/csrf/", { credentials: "include" });
+      const csrfRes = await fetch("/api/auth/csrf/", { credentials: "include" });
+      const csrfData = await csrfRes.json().catch(() => ({}));
+      if (csrfData && csrfData.csrfToken) {
+        localStorage.setItem("csrftoken", csrfData.csrfToken);
+      }
 
-      const csrfToken = getCookie("csrftoken");
+      const csrfToken = csrfData?.csrfToken || getCookie("csrftoken");
 
       const response = await fetch("/api/auth/login/", {
 

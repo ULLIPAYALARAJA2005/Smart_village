@@ -145,44 +145,49 @@ AUTH_USER_MODEL = 'users.User'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ---------------------------------------------------------------------------
-# CORS  (allow React dev-server and production frontend)
+# CORS  (allow React dev-server and production frontend on Vercel)
 # ---------------------------------------------------------------------------
-_cors_env = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://localhost:5174,http://localhost:5175,'
-    'http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175,'
-    'http://localhost:3000'
-)
-if _cors_env.strip() == '*':
-    CORS_ALLOW_ALL_ORIGINS = True
-    CORS_ALLOWED_ORIGINS = []
-else:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip() and o.strip() != '*']
-    CORS_ALLOW_ALL_ORIGINS = False
-
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+    r"^https://.*\.onrender\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
 
 # ---------------------------------------------------------------------------
 # CSRF
 # ---------------------------------------------------------------------------
-_csrf_env = os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    'http://localhost:5173,http://localhost:5174,http://localhost:5175,'
-    'http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175,'
-    'http://localhost:3000'
-)
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_env.split(',') if o.strip()]
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://localhost:3000",
+]
+_csrf_env = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+if _csrf_env:
+    for o in _csrf_env.split(','):
+        o = o.strip()
+        if o and o not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(o)
 
 # ---------------------------------------------------------------------------
-# Session / Cookie settings
+# Session / Cookie settings (SameSite=None + Secure for cross-origin Vercel -> Render)
 # ---------------------------------------------------------------------------
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 
 if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
