@@ -1,9 +1,16 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://smartvillage-api-tjih.onrender.com/api/:path*"
+    },
+    {
+      "source": "/media/:path*",
+      "destination": "https://smartvillage-api-tjih.onrender.com/media/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
-
