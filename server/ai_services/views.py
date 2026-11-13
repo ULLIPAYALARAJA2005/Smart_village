@@ -31,15 +31,43 @@ def analyze_complaint(request):
     text_res = None
     image_res = None
 
-    # 1. NLP Text Classification
-    if description and description.strip():
-        classifier = MultilingualTextClassifier.get_instance()
-        text_res = classifier.classify(description.strip())
+    # Run text + image classification in PARALLEL using threads (cuts latency in half)
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+    futures = {}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        if description and description.strip():
+            futures["text"] = executor.submit(
+                lambda: MultilingualTextClassifier.get_instance().classify(description.strip())
+            )
+        if photo:
+            # Read photo bytes into memory first so the file can be passed to the thread safely
+            photo_bytes = photo.read()
+            import io as _io
+            futures["image"] = executor.submit(
+                lambda pb=photo_bytes, fn=getattr(photo, "name", "photo.jpg"): (
+                    CLIPImageClassifier.get_instance().classify(
+                        type("_InMemFile", (), {
+                            "read": lambda self, n=-1: pb if n == -1 else pb[:n],
+                            "seek": lambda self, p: None,
+                            "size": len(pb),
+                            "name": fn,
+                        })()
+                    )
+                )
+            )
 
-    # 2. Vision Photo Classification
-    if photo:
-        img_classifier = CLIPImageClassifier.get_instance()
-        image_res = img_classifier.classify(photo)
+        # Collect results with a 6-second cap per task (graceful degradation)
+        for key, fut in futures.items():
+            try:
+                result = fut.result(timeout=6)
+                if key == "text":
+                    text_res = result
+                else:
+                    image_res = result
+            except FuturesTimeout:
+                logger.warning(f"AI classification timed out for: {key}")
+            except Exception as exc:
+                logger.error(f"AI classification error ({key}): {exc}")
 
     # 3. Decision & Agreement Engine
     text_cat = text_res.get("predicted_category") if text_res else None

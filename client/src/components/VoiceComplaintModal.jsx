@@ -127,6 +127,16 @@ const compressImageForAnalysis = (file) => {
   });
 };
 
+  // Instant client-side keyword classifier (runs in < 1ms, no network needed)
+  const quickClassify = (text) => {
+    const lower = (text || "").toLowerCase();
+    if (lower.includes("మురుగు") || lower.includes("కాలువ") || lower.includes("drain") || lower.includes("sewage") || lower.includes("గట్టర్")) return "drainage";
+    if (lower.includes("చెత్త") || lower.includes("waste") || lower.includes("trash") || lower.includes("garbage") || lower.includes("పారిశుధ్యం")) return "garbage";
+    if (lower.includes("కరెంటు") || lower.includes("విద్యుత్") || lower.includes("electric") || lower.includes("power") || lower.includes("transformer") || lower.includes("pole") || lower.includes("దీపాలు")) return "electricity";
+    if (lower.includes("నీళ్లు") || lower.includes("నీరు") || lower.includes("పైప్") || lower.includes("బోరు") || lower.includes("water") || lower.includes("pipeline") || lower.includes("tap")) return "water";
+    return null;
+  };
+
   // Run AI analysis
   const handleProceedToAnalysis = async () => {
     if (!description.trim() && !photo) {
@@ -137,14 +147,26 @@ const compressImageForAnalysis = (file) => {
     setStep("analyzing");
     setAnalysisError("");
 
+    // ⚡ Instant pre-classification: show a preliminary category < 1ms
+    const instantCat = quickClassify(description);
+    if (instantCat) {
+      setSelectedCategory(instantCat);
+    }
+
     try {
       const optimizedPhoto = photo ? await compressImageForAnalysis(photo) : null;
 
-      const result = await analyzeComplaintAPI({
+      // Race the API call against a 7-second timeout; whichever wins first
+      const apiCallPromise = analyzeComplaintAPI({
         description: description.trim(),
         photo: optimizedPhoto,
         language: isTelugu ? "te" : "en",
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 7000)
+      );
+
+      const result = await Promise.race([apiCallPromise, timeoutPromise]);
 
       setAiData(result);
       if (result.suggested_category) {
@@ -159,24 +181,16 @@ const compressImageForAnalysis = (file) => {
       setStep("review");
     } catch (err) {
       console.warn("AI analysis note:", err);
-      // Sensible instant fallback from description clues
-      const lower = description.toLowerCase();
-      let fallbackCat = "water";
-      if (lower.includes("కరెంటు") || lower.includes("విద్యుత్") || lower.includes("electric") || lower.includes("power") || lower.includes("pole")) {
-        fallbackCat = "electricity";
-      } else if (lower.includes("చెత్త") || lower.includes("waste") || lower.includes("trash") || lower.includes("garbage")) {
-        fallbackCat = "garbage";
-      } else if (lower.includes("మురుగు") || lower.includes("కాలువ") || lower.includes("drain") || lower.includes("sewage")) {
-        fallbackCat = "drainage";
-      }
+      // Fall back to the already-computed instant category or derive one now
+      const fallbackCat = instantCat || quickClassify(description) || "water";
       setSelectedCategory(fallbackCat);
 
       setAiData({
         suggested_category: fallbackCat,
         prediction_agreement: true,
         message: isTelugu
-          ? `ఏఐ ఇది ${fallbackCat} సమస్యగా సూచిస్తోంది. నిర్ధారించండి.`
-          : `AI suggests this is a ${fallbackCat} issue. Please confirm.`,
+          ? `AI ఇది ${fallbackCat} సమస్యగా గుర్తించింది. నిర్ధారించండి.`
+          : `AI identified this as a ${fallbackCat} issue. Please confirm.`,
       });
       ttsService.speakAiSuggestion(fallbackCat, isTelugu);
       setStep("review");
@@ -323,13 +337,41 @@ const compressImageForAnalysis = (file) => {
 
           {/* STEP 2: ANALYZING LOADING STATE */}
           {step === "analyzing" && (
-            <div style={{ textAlign: "center", padding: "40px 20px" }}>
-              <div style={{ fontSize: 50, animation: "bounce 1s infinite" }}>🤖</div>
-              <h3 style={{ marginTop: 16, color: "#1e293b" }}>
-                {isTelugu ? "కృత్రిమ మేధ (AI) పరిశీలిస్తోంది..." : "AI is analyzing your complaint..."}
+            <div style={{ textAlign: "center", padding: "32px 20px" }}>
+              {/* Spinner */}
+              <div style={{
+                width: 56, height: 56, border: "5px solid #e2e8f0",
+                borderTop: "5px solid #138A72", borderRadius: "50%",
+                animation: "spin 0.8s linear infinite", margin: "0 auto"
+              }} />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+              <h3 style={{ marginTop: 16, color: "#1e293b", fontSize: "1.05rem" }}>
+                {isTelugu ? "AI పరిశీలిస్తోంది..." : "AI is analyzing..."}
               </h3>
-              <p style={{ color: "#64748b", marginTop: 6, fontSize: "0.95rem" }}>
-                {isTelugu ? "వాయిస్ మరియు ఫోటోను సరిపోలుస్తున్నాము..." : "Comparing speech & photo against village civic issues..."}
+
+              {/* Show instant pre-classified category immediately if available */}
+              {selectedCategory && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  marginTop: 12, background: "#f0fdf4", border: "1px solid #bbf7d0",
+                  borderRadius: 999, padding: "6px 16px", fontSize: "0.9rem",
+                  color: "#166534", fontWeight: 600
+                }}>
+                  <span>{getCategoryObj(selectedCategory)?.icon}</span>
+                  <span>
+                    {isTelugu
+                      ? getCategoryObj(selectedCategory)?.nameTe
+                      : getCategoryObj(selectedCategory)?.nameEn}
+                  </span>
+                  <span style={{ fontSize: "0.78rem", color: "#4ade80" }}>
+                    {isTelugu ? "(అంచనా)" : "(estimated)"}
+                  </span>
+                </div>
+              )}
+
+              <p style={{ color: "#94a3b8", marginTop: 10, fontSize: "0.82rem" }}>
+                {isTelugu ? "సర్వర్ నిర్ధారణ కోసం వేచి ఉంది... (సాధారణంగా 2–4 సెకండ్లు)" : "Waiting for server confirmation… (usually 2–4 s)"}
               </p>
             </div>
           )}
