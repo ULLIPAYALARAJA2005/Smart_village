@@ -5,6 +5,7 @@ import WhySmartVillage from "../components/WhySmartVillage";
 import Features from "../components/Features";
 import HowItWorks from "../components/HowItWorks";
 import AccessibilitySection from "../components/AccessibilitySection";
+import VoiceFeatureSection from "../components/VoiceFeatureSection";
 import AnnouncementsSection from "../components/AnnouncementsSection";
 import UserRolesSection from "../components/UserRolesSection";
 import ImpactBenefits from "../components/ImpactBenefits";
@@ -33,6 +34,8 @@ export default function Home() {
 
       {/* 6. Special Accessibility Section (Voice & Inclusive Tech) */}
       <AccessibilitySection />
+        {/* 6.5 Voice AI Complaint System */}
+        <VoiceFeatureSection />
 
       {/* 7. Live Real Announcements Preview */}
       <AnnouncementsSection />
