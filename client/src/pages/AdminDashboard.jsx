@@ -16,6 +16,8 @@ import {
   fetchAdminWorkersListAPI,
   resetWorkerPasswordAPI,
 } from "../services/aiApi";
+import MainLayout from "../components/MainLayout";
+import { StatCard, StatusBadge, PageHeader } from "../components/UIComponents";
 
 import {
   BarChart,
@@ -684,61 +686,100 @@ export default function AdminDashboard() {
     }
   }, [popupMessage]);
 
+  const navSections = [
+    {
+      title: "Overview",
+      items: [
+        { key: "overview", label: "Dashboard Overview", icon: "📊" },
+      ],
+    },
+    {
+      title: "Management",
+      items: [
+        {
+          key: "assignments",
+          label: "Work Monitoring",
+          icon: "📋",
+          badge: pendingVerificationIssues.length > 0 ? `${pendingVerificationIssues.length} to verify` : undefined,
+        },
+        { key: "workers", label: "Manage Workers", icon: "👷", badge: adminWorkersDetailed.length },
+        { key: "requests", label: "Villager Approvals", icon: "👤", badge: requests.length > 0 ? `${requests.length} new` : undefined },
+      ],
+    },
+    {
+      title: "Village Services",
+      items: [
+        { key: "map", label: "GPS Complaint Map", icon: "🗺️", badge: allIssuesList.filter(i => i.location_captured).length },
+        { key: "announcements", label: "Announcements", icon: "📢" },
+        { key: "feedback", label: "Villager Feedback", icon: "⭐" },
+      ],
+    },
+    {
+      title: "Quick Action",
+      items: [
+        { key: "create-worker", label: "Add New Worker", icon: "➕" },
+      ],
+    },
+  ];
+
+  const handleNavSelect = (key) => {
+    if (key === "requests") {
+      setShowRequestPopup(true);
+    } else if (key === "create-worker") {
+      setShowCreateWorkerModal(true);
+    } else if (key === "feedback") {
+      navigate("/admin/feedback");
+    } else {
+      setAdminActiveTab(key);
+      if (key === "map" || key === "assignments" || key === "workers") {
+        loadGpsAndAssignmentData();
+      }
+      if (key === "assignments" && pendingVerificationIssues.length > 0) {
+        setMonitoringFilter("completed");
+      }
+    }
+  };
+
   return (
-
-    <div className="admin-container">
-      {/* NAVBAR */}
-      <div className="admin-navbar">
-        <h2 className="main-heading">Admin Dashboard</h2>
-        
-        {/* Mobile Hamburger */}
-        <button 
-          className="admin-hamburger" 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        >
-          {isMobileMenuOpen ? "✕" : "☰"}
-        </button>
-
-        <div className={`admin-right ${isMobileMenuOpen ? 'menu-open' : ''}`}>
-          <button
-            type="button"
-            className="premium-nav-btn"
-            style={{
-              background: adminActiveTab === "announcements" ? "#2563eb" : "#f8fafc",
-              color: adminActiveTab === "announcements" ? "#ffffff" : "#1e293b",
-              fontWeight: "700",
-              border: "1px solid #cbd5e1",
-            }}
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              setAdminActiveTab("announcements");
-            }}
-          >
-            <span className="n-icon">📢</span> Announcements
-          </button>
-          <button
-            type="button"
-            className="premium-nav-btn"
-            style={{ background: "#059669", color: "#fff", border: "none", fontWeight: "700" }}
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              setShowCreateWorkerModal(true);
-            }}
-          >
-            <span className="n-icon">➕</span> Create Worker
-          </button>
-          <button className="premium-nav-btn nav-feedback" onClick={() => { setIsMobileMenuOpen(false); navigate("/admin/feedback"); }}>
-            <span className="n-icon">📝</span> Manage Feedbacks
-          </button>
-          <button className="premium-nav-btn nav-requests" onClick={() => { setIsMobileMenuOpen(false); setShowRequestPopup(true); }}>
-            <span className="n-icon">👤</span> Signup Requests
-            {requests.length > 0 && <span className="notification-dot"></span>}
-          </button>
-          <button className="premium-nav-btn nav-logout" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>
-            <span className="n-icon">⏻</span> Logout
-          </button>
-        </div>
-      </div>
+    <MainLayout
+      pageTitle="Panchayat Administrative Portal"
+      role="admin"
+      userName="Panchayat Admin"
+      navSections={navSections}
+      activeNavKey={adminActiveTab}
+      onSelectNavKey={handleNavSelect}
+      onLogout={logout}
+    >
+      {/* ── HEADER & QUICK ACTIONS ── */}
+      <PageHeader
+        title="Village Governance & Civic Administration"
+        description="Centralized administration for issues, field workers, GPS mapping and public broadcasts"
+        actions={
+          <>
+            <button
+              type="button"
+              className="gov-btn gov-btn-secondary"
+              onClick={() => setShowCreateWorkerModal(true)}
+            >
+              <span>➕</span> Create Field Worker
+            </button>
+            <button
+              type="button"
+              className="gov-btn gov-btn-outline"
+              onClick={() => setShowRequestPopup(true)}
+            >
+              <span>👤</span> Signup Approvals ({requests.length})
+            </button>
+            <button
+              type="button"
+              className="gov-btn gov-btn-outline"
+              onClick={() => navigate("/admin/feedback")}
+            >
+              <span>⭐</span> Manage Feedbacks
+            </button>
+          </>
+        }
+      />
 
       {/* LOGOUT CONFIRMATION POPUP */}
       {showLogoutConfirm && (
@@ -830,141 +871,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
-
-      {/* ── ADMIN NAVIGATION TABS ── */}
-      <div style={{ margin: "1rem auto", maxWidth: "1280px", padding: "0 1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", background: "#ffffff", padding: "0.5rem", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setAdminActiveTab("overview")}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: adminActiveTab === "overview" ? "#2563eb" : "transparent",
-              color: adminActiveTab === "overview" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>📊</span> Overview & Categories
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAdminActiveTab("map");
-              loadGpsAndAssignmentData();
-            }}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: adminActiveTab === "map" ? "#2563eb" : "transparent",
-              color: adminActiveTab === "map" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>🗺️</span> Village GPS Map ({allIssuesList.filter(i => i.location_captured).length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAdminActiveTab("assignments");
-              if (pendingVerificationIssues.length > 0) setMonitoringFilter("completed");
-              loadGpsAndAssignmentData();
-            }}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: adminActiveTab === "assignments" ? "#2563eb" : "transparent",
-              color: adminActiveTab === "assignments" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>📋</span> Work Monitoring
-            {pendingVerificationIssues.length > 0 && (
-              <span style={{ background: "#dc2626", color: "#ffffff", padding: "2px 7px", borderRadius: "9999px", fontSize: "0.72rem", fontWeight: "800" }}>
-                🔔 {pendingVerificationIssues.length} to Verify!
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAdminActiveTab("workers");
-              loadGpsAndAssignmentData();
-            }}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: adminActiveTab === "workers" ? "#2563eb" : "transparent",
-              color: adminActiveTab === "workers" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>👷</span> Workers & Credentials ({adminWorkersDetailed.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAdminActiveTab("announcements")}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: adminActiveTab === "announcements" ? "#2563eb" : "transparent",
-              color: adminActiveTab === "announcements" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>📢</span> Village Announcements (ప్రకటనలు)
-          </button>
-        </div>
-      </div>
 
       {/* ── TAB 1: OVERVIEW & CATEGORY ISSUES ── */}
       {adminActiveTab === "overview" && (
@@ -1692,9 +1598,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-
-    </div>
-
+    </MainLayout>
   );
-
 }

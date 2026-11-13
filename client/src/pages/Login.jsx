@@ -165,12 +165,9 @@ export default function Login() {
       )}
 
       <div className="login-card">
-
-        <h2>FixMyVillage Login</h2>
-
-        <p className="subtitle">
-          Access the civic issue platform
-        </p>
+        <div className="login-header-emblem">🏛️</div>
+        <h2>Fix My Village</h2>
+        <p className="subtitle">Sign in to your Village Portal Account</p>
 
         <form onSubmit={handleSubmit}>
 

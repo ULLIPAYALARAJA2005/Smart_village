@@ -27,7 +27,7 @@ server/**/*.pyc
 server/media/
 
 # SQLite database (if using SQLite)
-server/db.sqlite3
+# server/db.sqlite3  # temporarily tracked for debugging
 
 # =========================
 # Environment variables

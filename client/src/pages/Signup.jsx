@@ -181,12 +181,9 @@ export default function Signup() {
       )}
 
       <div className="signup-card">
-
-        <h2>FixMyVillage Registration</h2>
-
-        <p className="subtitle">
-          Register to report village issues
-        </p>
+        <div className="signup-header-emblem">🏛️</div>
+        <h2>Fix My Village</h2>
+        <p className="subtitle">Create Citizen Account for Village Services</p>
 
         <form onSubmit={handleSubmit}>
 

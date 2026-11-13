@@ -8,6 +8,8 @@ import GPSLocationPicker from "../components/GPSLocationPicker";
 import { updateComplaintAPI, deleteComplaintAPI } from "../services/aiApi";
 import VillagerAnnouncementsSection from "../components/VillagerAnnouncementsSection";
 import { fetchAnnouncementStatsSummaryAPI } from "../services/announcementApi";
+import MainLayout from "../components/MainLayout";
+import { StatCard, StatusBadge, PageHeader } from "../components/UIComponents";
 
 const getImageUrl = (photo) => {
   if (!photo) return null;
@@ -395,288 +397,113 @@ export default function VillagerDashboard() {
     return true;
   });
 
+  const navSections = [
+    {
+      title: "Navigation",
+      items: [
+        { key: "my-complaints", label: "My Complaints (నా ఫిర్యాదులు)", icon: "📋", badge: myIssues.length },
+        { key: "new-complaint", label: "Submit Complaint (ఫిర్యాదు)", icon: "✍️" },
+        { key: "community", label: "Community Feed (గ్రామ సమాచారం)", icon: "🏘️", badge: allCommunityIssues.length },
+        { key: "announcements", label: "Announcements (ప్రకటనలు)", icon: "📢", badge: announcementStats.unread_count || undefined },
+      ],
+    },
+    {
+      title: "Actions & Voice",
+      items: [
+        { key: "voice-complaint", label: "Voice Complaint (వాయిస్)", icon: "🎙️" },
+        { key: "voice-status", label: "Voice Status Check", icon: "🔍" },
+        { key: "feedback", label: "Give Feedback (ఫీడ్‌బ్యాక్)", icon: "⭐" },
+      ],
+    },
+  ];
+
+  const handleNavSelect = (key) => {
+    if (key === "voice-complaint") {
+      setShowVoiceModal(true);
+    } else if (key === "voice-status") {
+      setShowVoiceTracker(true);
+    } else if (key === "feedback") {
+      navigate("/villager/feedback");
+    } else {
+      setActiveTab(key);
+      if (key === "announcements") setAnnouncementsKey((k) => k + 1);
+    }
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Poppins', sans-serif", color: "#1e293b" }}>
+    <MainLayout
+      pageTitle="Citizen Portal (గ్రామస్థుల వేదిక)"
+      role="villager"
+      userName={userName}
+      navSections={navSections}
+      activeNavKey={activeTab}
+      onSelectNavKey={handleNavSelect}
+      onLogout={() => setShowLogoutConfirm(true)}
+    >
       {toast && <Toast message={toast.message} type={toast.type} />}
 
-      {/* ── TOP MODERN NAVBAR ── */}
-      <header
-        style={{
-          background: "#ffffff",
-          borderBottom: "1px solid #e2e8f0",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-        }}
-      >
-        <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0.85rem 1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {/* Logo & Portal Info */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{ width: 42, height: 42, borderRadius: "10px", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.4rem", fontWeight: "700", boxShadow: "0 4px 10px rgba(37,99,235,0.3)" }}>
-              🏘️
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <h1 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "800", color: "#0f172a" }}>Fix My Village</h1>
-                <span style={{ background: "#dcfce7", color: "#166534", fontSize: "0.72rem", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontWeight: "700" }}>
-                  🟢 Live Citizen Portal
-                </span>
-              </div>
-              <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>Community Issue Reporting & Governance</p>
-            </div>
-          </div>
-
-          {/* Quick Action Buttons */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <button
-              type="button"
-              onClick={() => setShowVoiceModal(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                padding: "0.5rem 0.9rem",
-                background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "700",
-                fontSize: "0.85rem",
-                boxShadow: "0 2px 6px rgba(124, 58, 237, 0.3)",
-              }}
-            >
-              <span>🎙️</span> AI Voice Complaint
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowVoiceTracker(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.4rem",
-                padding: "0.5rem 0.85rem",
-                background: "#f1f5f9",
-                color: "#334155",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "0.85rem",
-              }}
-            >
-              <span>🔍</span> Voice Status
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate("/villager/feedback")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.3rem",
-                padding: "0.5rem 0.75rem",
-                background: "#f8fafc",
-                color: "#475569",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "0.85rem",
-              }}
-            >
-              <span>⭐</span> Feedback
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              style={{
-                padding: "0.5rem 0.8rem",
-                background: "#fee2e2",
-                color: "#b91c1c",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "700",
-                fontSize: "0.85rem",
-              }}
-            >
-              ⏻ Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── USER WELCOME & REAL-TIME SUMMARY STRIP ── */}
-      <div style={{ maxWidth: "1240px", margin: "1.25rem auto 0", padding: "0 1.25rem" }}>
-        <div
-          style={{
-            background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-            color: "#ffffff",
-            borderRadius: "14px",
-            padding: "1.25rem 1.5rem",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "1rem",
-            boxShadow: "0 4px 15px rgba(15, 23, 42, 0.15)",
-          }}
-        >
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-              <span style={{ fontSize: "1.4rem" }}>👋</span>
-              <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "700" }}>Welcome, {userName}!</h2>
-            </div>
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "#94a3b8" }}>
-              {userInfo.aadhar ? `Aadhaar: ${userInfo.aadhar} · ` : ""}Citizen ID #{userId} · {userInfo.email || "Registered Villager"}
-            </p>
-          </div>
-
-          {/* Quick Metrics */}
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#60a5fa" }}>{stats.total}</span>
-              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>My Complaints</span>
-            </div>
-            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#facc15" }}>{stats.pending + stats.assigned}</span>
-              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Pending / Assigned</span>
-            </div>
-            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#38bdf8" }}>{stats.progress}</span>
-              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>In Progress</span>
-            </div>
-            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#4ade80" }}>{stats.resolved}</span>
-              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Resolved</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── CLEAN TAB DIVISION (Real-time, Uncluttered) ── */}
-      <div style={{ maxWidth: "1240px", margin: "1.25rem auto", padding: "0 1.25rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", background: "#ffffff", padding: "0.4rem", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab("my-complaints")}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "my-complaints" ? "#2563eb" : "transparent",
-              color: activeTab === "my-complaints" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>📋</span> My Complaints (నా ఫిర్యాదులు)
-            <span
-              style={{
-                background: activeTab === "my-complaints" ? "rgba(255,255,255,0.25)" : "#e2e8f0",
-                color: activeTab === "my-complaints" ? "#ffffff" : "#334155",
-                fontSize: "0.75rem",
-                padding: "0.15rem 0.5rem",
-                borderRadius: "9999px",
-              }}
-            >
-              {myIssues.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("new-complaint")}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "new-complaint" ? "#2563eb" : "transparent",
-              color: activeTab === "new-complaint" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>✍️</span> File New Complaint (ఫిర్యాదు చేయండి)
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("community")}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "community" ? "#2563eb" : "transparent",
-              color: activeTab === "community" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>🏘️</span> Village Community Feed ({allCommunityIssues.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setActiveTab("announcements"); setAnnouncementsKey(k => k + 1); }}
-            style={{
-              flex: "1 1 200px",
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: activeTab === "announcements" ? "#2563eb" : "transparent",
-              color: activeTab === "announcements" ? "#ffffff" : "#475569",
-              fontWeight: "700",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <span>📢</span> Announcements (గ్రామ ప్రకటనలు)
-            {announcementStats.unread_count > 0 && (
-              <span
-                style={{
-                  background: "#dc2626",
-                  color: "#ffffff",
-                  padding: "2px 7px",
-                  borderRadius: "9999px",
-                  fontSize: "0.72rem",
-                  fontWeight: "800",
-                }}
+      {/* ── USER WELCOME & REAL-TIME STATS GRID ── */}
+      <div style={{ marginBottom: "1.75rem" }}>
+        <PageHeader
+          title={`Namaste, ${userName}!`}
+          description={userInfo.aadhar ? `Aadhaar: ${userInfo.aadhar} · Citizen ID #${userId} · ${userInfo.email || "Registered Villager"}` : `Citizen ID #${userId} · Fix My Village Portal`}
+          actions={
+            <>
+              <button
+                type="button"
+                className="gov-btn gov-btn-secondary"
+                onClick={() => setShowVoiceModal(true)}
               >
-                {announcementStats.unread_count} New
-              </span>
-            )}
-          </button>
+                <span>🎙️</span> AI Voice Complaint
+              </button>
+              <button
+                type="button"
+                className="gov-btn gov-btn-outline"
+                onClick={() => setShowVoiceTracker(true)}
+              >
+                <span>🔍</span> Voice Status
+              </button>
+            </>
+          }
+        />
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+          <StatCard
+            title="My Complaints"
+            value={stats.total}
+            subtext="Total grievances filed"
+            icon="📋"
+            iconBg="var(--color-info-bg)"
+            iconColor="var(--color-info)"
+            onClick={() => setActiveTab("my-complaints")}
+          />
+          <StatCard
+            title="Pending / Assigned"
+            value={stats.pending + stats.assigned}
+            subtext="Awaiting work completion"
+            icon="⏳"
+            iconBg="var(--color-warning-bg)"
+            iconColor="var(--color-warning)"
+            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("active"); }}
+          />
+          <StatCard
+            title="In Progress"
+            value={stats.progress}
+            subtext="Worker actively on-site"
+            icon="⚡"
+            iconBg="#e0e7ff"
+            iconColor="#4338ca"
+            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("active"); }}
+          />
+          <StatCard
+            title="Resolved"
+            value={stats.resolved}
+            subtext="Successfully completed"
+            icon="✅"
+            iconBg="var(--color-success-bg)"
+            iconColor="var(--color-success)"
+            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("resolved"); }}
+          />
         </div>
       </div>
 
@@ -1666,6 +1493,6 @@ export default function VillagerDashboard() {
           </div>
         </div>
       )}
-    </div>
+    </MainLayout>
   );
 }
