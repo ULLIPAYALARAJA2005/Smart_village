@@ -160,7 +160,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # CSRF
 # ---------------------------------------------------------------------------
 CSRF_TRUSTED_ORIGINS = [
-    "https://*.vercel.app",
+    "https://smart-village-ivory.vercel.app",
     "https://*.onrender.com",
     "http://localhost:5173",
     "http://localhost:5174",
