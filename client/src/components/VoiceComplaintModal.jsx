@@ -127,13 +127,57 @@ const compressImageForAnalysis = (file) => {
   });
 };
 
-  // Instant client-side keyword classifier (runs in < 1ms, no network needed)
+  // ── Instant client-side classifier (mirrors backend EXCLUSIVE_PHRASES) ──
+  // Runs in < 1ms with no network. Covers Telugu + English comprehensively.
   const quickClassify = (text) => {
-    const lower = (text || "").toLowerCase();
-    if (lower.includes("మురుగు") || lower.includes("కాలువ") || lower.includes("drain") || lower.includes("sewage") || lower.includes("గట్టర్")) return "drainage";
-    if (lower.includes("చెత్త") || lower.includes("waste") || lower.includes("trash") || lower.includes("garbage") || lower.includes("పారిశుధ్యం")) return "garbage";
-    if (lower.includes("కరెంటు") || lower.includes("విద్యుత్") || lower.includes("electric") || lower.includes("power") || lower.includes("transformer") || lower.includes("pole") || lower.includes("దీపాలు")) return "electricity";
-    if (lower.includes("నీళ్లు") || lower.includes("నీరు") || lower.includes("పైప్") || lower.includes("బోరు") || lower.includes("water") || lower.includes("pipeline") || lower.includes("tap")) return "water";
+    const t = (text || "").toLowerCase();
+
+    // Helper: does text contain any of these phrases/words?
+    const has = (...terms) => terms.some(w => t.includes(w));
+
+    // ── DRAINAGE (check first — "మురుగు నీరు" is NOT water) ──────────────
+    if (has(
+      "మురుగు నీరు", "మురుగునీరు", "మురుగు కాలువ", "మురుగుకాల్వ",
+      "కాలువలు నిండిపోయాయి", "మురుగు పారుదల", "డ్రైనేజీ పైపులు",
+      "మురుగు గుంత", "సెప్టిక్ ట్యాంకు", "మురుగు", "కాలువ", "డ్రైనేజీ", "గట్టర్", "మ్యాన్‌హోల్",
+      "sewage", "drainage", "sewer", "gutter", "manhole", "clogged drain",
+      "blocked drain", "drain overflow", "sewage overflow", "drain blocked",
+      "wastewater", "open drain", "waterlogging", "water stagnation"
+    )) return "drainage";
+
+    // ── ELECTRICITY ──────────────────────────────────────────────────────
+    if (has(
+      "కరెంటు లేదు", "కరెంటు పోయింది", "విద్యుత్ సరఫరా", "ట్రాన్స్‌ఫార్మర్",
+      "విద్యుత్ స్తంభం", "కరెంటు వైర్లు", "వీధి దీపాలు", "కరెంటు", "విద్యుత్",
+      "స్తంభం విరిగింది", "వైర్లు వేలాడు", "దీపాలు వెలగడం లేదు", "పవర్ కట్",
+      "power cut", "power failure", "power outage", "no electricity", "no power",
+      "electric pole", "streetlight", "transformer", "street light",
+      "voltage", "power supply", "electricity not coming",
+      "electric wire", "live wire", "pole broken", "pole fallen"
+    )) return "electricity";
+
+    // ── GARBAGE ──────────────────────────────────────────────────────────
+    if (has(
+      "చెత్త కుప్పలు", "చెత్త బండి", "చెత్త తీయడం లేదు", "పారిశుధ్యం పనులు",
+      "చెత్త తొట్టెలు", "చెత్త బిన్", "చెత్త", "పారిశుధ్యం", "వ్యర్థాలు", "దుర్వాసన",
+      "garbage", "waste", "trash", "litter", "rubbish", "dustbin",
+      "garbage collection", "garbage dump", "waste not collected",
+      "sweeper", "sanitation", "plastic waste", "overflowing bin",
+      "bad smell", "foul smell", "mosquitoes due to", "flies due to"
+    )) return "garbage";
+
+    // ── WATER ────────────────────────────────────────────────────────────
+    if (has(
+      "మంచినీళ్లు రావడం లేదు", "మంచినీరు రావడం లేదు", "నీళ్లు రావడం లేదు",
+      "తాగునీటి సమస్య", "మంచినీటి సరఫరా", "మంచినీటి పైప్‌లైన్",
+      "పైప్‌లైన్ లీకేజ్", "బోరు మోటారు", "కుళాయి నుండి నీళ్లు", "ట్యాంకు ఖాళీ",
+      "మంచినీళ్లు", "మంచినీరు", "తాగునీరు", "నీళ్లు", "కుళాయి", "పైప్‌లైన్", "బోరు", "పైపు",
+      "drinking water", "water supply", "no water", "water not coming",
+      "pipeline burst", "pipe leakage", "borewell", "water tank",
+      "water tap", "water pipeline", "water shortage", "tap water",
+      "contaminated water", "dirty tap water", "water pump"
+    )) return "water";
+
     return null;
   };
 
