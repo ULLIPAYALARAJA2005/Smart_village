@@ -19,9 +19,13 @@ class Issue(models.Model):
         on_delete=models.CASCADE
     )
 
-    street = models.CharField(max_length=100)
+    citizen_name = models.CharField(max_length=150, blank=True, default="")
+    citizen_phone = models.CharField(max_length=15, blank=True, default="")
+    village_name = models.CharField(max_length=100, blank=True, default="")
 
-    house_no = models.CharField(max_length=50)
+    street = models.CharField(max_length=100, blank=True, default="")
+
+    house_no = models.CharField(max_length=50, blank=True, default="")
 
     description = models.TextField()
 
@@ -91,6 +95,34 @@ class Issue(models.Model):
         ],
         default="medium"
     )
+
+    @property
+    def get_citizen_name(self):
+        if self.citizen_name:
+            return self.citizen_name
+        if self.user:
+            return getattr(self.user, 'full_name', '') or self.user.get_full_name() or self.user.username
+        return ""
+
+    @property
+    def get_citizen_phone(self):
+        if self.citizen_phone:
+            return self.citizen_phone
+        if self.user:
+            return getattr(self.user, 'mobile_number', '')
+        return ""
+
+    @property
+    def get_village_name(self):
+        if self.village_name:
+            return self.village_name
+        if self.user:
+            return getattr(self.user, 'village_name', '')
+        return ""
+
+    def __str__(self):
+        return f"Issue #{self.id} ({self.category}) - {self.get_citizen_name}"
+
 
 
 class IssueAIAnalysis(models.Model):

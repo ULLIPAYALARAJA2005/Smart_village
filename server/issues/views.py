@@ -22,19 +22,40 @@ def issue_list(request, category):
     if request.user.role != "villager":
         return Response({"message": "You are not allowed"}, status=403)
 
+    user = request.user
+    citizen_name = user.full_name or user.get_full_name() or user.username
+    citizen_phone = user.mobile_number or ""
+    village_name = user.village_name or ""
+
+    # Street: use request input if provided, otherwise fallback to registered street_name
+    req_street = (request.data.get("street") or "").strip()
+    street = req_street if req_street else (user.street_name or "")
+
+    # House No: use request input if provided, otherwise fallback to registered house_number
+    req_house = request.data.get("houseNo") or request.data.get("house_no") or ""
+    req_house = str(req_house).strip()
+    house_no = req_house if req_house else (user.house_number or "")
+
     lat = request.data.get("latitude")
     lng = request.data.get("longitude")
     acc = request.data.get("location_accuracy")
 
+    now = timezone.now()
+    date_val = (request.data.get("date") or "").strip() or now.strftime("%d/%m/%Y")
+    time_val = (request.data.get("time") or "").strip() or now.strftime("%I:%M %p")
+
     issue = Issue.objects.create(
         category=category,
-        user=request.user,
-        street=request.data.get("street", ""),
-        house_no=request.data.get("houseNo", ""),
+        user=user,
+        citizen_name=citizen_name,
+        citizen_phone=citizen_phone,
+        village_name=village_name,
+        street=street,
+        house_no=house_no,
         description=request.data.get("description", ""),
         photo=request.FILES.get("photo"),
-        date=request.data.get("date", ""),
-        time=request.data.get("time", ""),
+        date=date_val,
+        time=time_val,
         input_method=request.data.get("input_method", "manual"),
         language=request.data.get("language", "en"),
         latitude=float(lat) if (lat is not None and str(lat).strip() != "") else None,

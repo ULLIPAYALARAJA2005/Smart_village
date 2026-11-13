@@ -127,60 +127,6 @@ const compressImageForAnalysis = (file) => {
   });
 };
 
-  // ── Instant client-side classifier (mirrors backend EXCLUSIVE_PHRASES) ──
-  // Runs in < 1ms with no network. Covers Telugu + English comprehensively.
-  const quickClassify = (text) => {
-    const t = (text || "").toLowerCase();
-
-    // Helper: does text contain any of these phrases/words?
-    const has = (...terms) => terms.some(w => t.includes(w));
-
-    // ── DRAINAGE (check first — "మురుగు నీరు" is NOT water) ──────────────
-    if (has(
-      "మురుగు నీరు", "మురుగునీరు", "మురుగు కాలువ", "మురుగుకాల్వ",
-      "కాలువలు నిండిపోయాయి", "మురుగు పారుదల", "డ్రైనేజీ పైపులు",
-      "మురుగు గుంత", "సెప్టిక్ ట్యాంకు", "మురుగు", "కాలువ", "డ్రైనేజీ", "గట్టర్", "మ్యాన్‌హోల్",
-      "sewage", "drainage", "sewer", "gutter", "manhole", "clogged drain",
-      "blocked drain", "drain overflow", "sewage overflow", "drain blocked",
-      "wastewater", "open drain", "waterlogging", "water stagnation"
-    )) return "drainage";
-
-    // ── ELECTRICITY ──────────────────────────────────────────────────────
-    if (has(
-      "కరెంటు లేదు", "కరెంటు పోయింది", "విద్యుత్ సరఫరా", "ట్రాన్స్‌ఫార్మర్",
-      "విద్యుత్ స్తంభం", "కరెంటు వైర్లు", "వీధి దీపాలు", "కరెంటు", "విద్యుత్",
-      "స్తంభం విరిగింది", "వైర్లు వేలాడు", "దీపాలు వెలగడం లేదు", "పవర్ కట్",
-      "power cut", "power failure", "power outage", "no electricity", "no power",
-      "electric pole", "streetlight", "transformer", "street light",
-      "voltage", "power supply", "electricity not coming",
-      "electric wire", "live wire", "pole broken", "pole fallen"
-    )) return "electricity";
-
-    // ── GARBAGE ──────────────────────────────────────────────────────────
-    if (has(
-      "చెత్త కుప్పలు", "చెత్త బండి", "చెత్త తీయడం లేదు", "పారిశుధ్యం పనులు",
-      "చెత్త తొట్టెలు", "చెత్త బిన్", "చెత్త", "పారిశుధ్యం", "వ్యర్థాలు", "దుర్వాసన",
-      "garbage", "waste", "trash", "litter", "rubbish", "dustbin",
-      "garbage collection", "garbage dump", "waste not collected",
-      "sweeper", "sanitation", "plastic waste", "overflowing bin",
-      "bad smell", "foul smell", "mosquitoes due to", "flies due to"
-    )) return "garbage";
-
-    // ── WATER ────────────────────────────────────────────────────────────
-    if (has(
-      "మంచినీళ్లు రావడం లేదు", "మంచినీరు రావడం లేదు", "నీళ్లు రావడం లేదు",
-      "తాగునీటి సమస్య", "మంచినీటి సరఫరా", "మంచినీటి పైప్‌లైన్",
-      "పైప్‌లైన్ లీకేజ్", "బోరు మోటారు", "కుళాయి నుండి నీళ్లు", "ట్యాంకు ఖాళీ",
-      "మంచినీళ్లు", "మంచినీరు", "తాగునీరు", "నీళ్లు", "కుళాయి", "పైప్‌లైన్", "బోరు", "పైపు",
-      "drinking water", "water supply", "no water", "water not coming",
-      "pipeline burst", "pipe leakage", "borewell", "water tank",
-      "water tap", "water pipeline", "water shortage", "tap water",
-      "contaminated water", "dirty tap water", "water pump"
-    )) return "water";
-
-    return null;
-  };
-
   // Run AI analysis
   const handleProceedToAnalysis = async () => {
     if (!description.trim() && !photo) {
@@ -191,26 +137,14 @@ const compressImageForAnalysis = (file) => {
     setStep("analyzing");
     setAnalysisError("");
 
-    // ⚡ Instant pre-classification: show a preliminary category < 1ms
-    const instantCat = quickClassify(description);
-    if (instantCat) {
-      setSelectedCategory(instantCat);
-    }
-
     try {
       const optimizedPhoto = photo ? await compressImageForAnalysis(photo) : null;
 
-      // Race the API call against a 7-second timeout; whichever wins first
-      const apiCallPromise = analyzeComplaintAPI({
+      const result = await analyzeComplaintAPI({
         description: description.trim(),
         photo: optimizedPhoto,
         language: isTelugu ? "te" : "en",
       });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 7000)
-      );
-
-      const result = await Promise.race([apiCallPromise, timeoutPromise]);
 
       setAiData(result);
       if (result.suggested_category) {
@@ -225,16 +159,24 @@ const compressImageForAnalysis = (file) => {
       setStep("review");
     } catch (err) {
       console.warn("AI analysis note:", err);
-      // Fall back to the already-computed instant category or derive one now
-      const fallbackCat = instantCat || quickClassify(description) || "water";
+      // Sensible instant fallback from description clues
+      const lower = description.toLowerCase();
+      let fallbackCat = "water";
+      if (lower.includes("కరెంటు") || lower.includes("విద్యుత్") || lower.includes("electric") || lower.includes("power") || lower.includes("pole")) {
+        fallbackCat = "electricity";
+      } else if (lower.includes("చెత్త") || lower.includes("waste") || lower.includes("trash") || lower.includes("garbage")) {
+        fallbackCat = "garbage";
+      } else if (lower.includes("మురుగు") || lower.includes("కాలువ") || lower.includes("drain") || lower.includes("sewage")) {
+        fallbackCat = "drainage";
+      }
       setSelectedCategory(fallbackCat);
 
       setAiData({
         suggested_category: fallbackCat,
         prediction_agreement: true,
         message: isTelugu
-          ? `AI ఇది ${fallbackCat} సమస్యగా గుర్తించింది. నిర్ధారించండి.`
-          : `AI identified this as a ${fallbackCat} issue. Please confirm.`,
+          ? `ఏఐ ఇది ${fallbackCat} సమస్యగా సూచిస్తోంది. నిర్ధారించండి.`
+          : `AI suggests this is a ${fallbackCat} issue. Please confirm.`,
       });
       ttsService.speakAiSuggestion(fallbackCat, isTelugu);
       setStep("review");
@@ -381,41 +323,13 @@ const compressImageForAnalysis = (file) => {
 
           {/* STEP 2: ANALYZING LOADING STATE */}
           {step === "analyzing" && (
-            <div style={{ textAlign: "center", padding: "32px 20px" }}>
-              {/* Spinner */}
-              <div style={{
-                width: 56, height: 56, border: "5px solid #e2e8f0",
-                borderTop: "5px solid #138A72", borderRadius: "50%",
-                animation: "spin 0.8s linear infinite", margin: "0 auto"
-              }} />
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-              <h3 style={{ marginTop: 16, color: "#1e293b", fontSize: "1.05rem" }}>
-                {isTelugu ? "AI పరిశీలిస్తోంది..." : "AI is analyzing..."}
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <div style={{ fontSize: 50, animation: "bounce 1s infinite" }}>🤖</div>
+              <h3 style={{ marginTop: 16, color: "#1e293b" }}>
+                {isTelugu ? "కృత్రిమ మేధ (AI) పరిశీలిస్తోంది..." : "AI is analyzing your complaint..."}
               </h3>
-
-              {/* Show instant pre-classified category immediately if available */}
-              {selectedCategory && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  marginTop: 12, background: "#f0fdf4", border: "1px solid #bbf7d0",
-                  borderRadius: 999, padding: "6px 16px", fontSize: "0.9rem",
-                  color: "#166534", fontWeight: 600
-                }}>
-                  <span>{getCategoryObj(selectedCategory)?.icon}</span>
-                  <span>
-                    {isTelugu
-                      ? getCategoryObj(selectedCategory)?.nameTe
-                      : getCategoryObj(selectedCategory)?.nameEn}
-                  </span>
-                  <span style={{ fontSize: "0.78rem", color: "#4ade80" }}>
-                    {isTelugu ? "(అంచనా)" : "(estimated)"}
-                  </span>
-                </div>
-              )}
-
-              <p style={{ color: "#94a3b8", marginTop: 10, fontSize: "0.82rem" }}>
-                {isTelugu ? "సర్వర్ నిర్ధారణ కోసం వేచి ఉంది... (సాధారణంగా 2–4 సెకండ్లు)" : "Waiting for server confirmation… (usually 2–4 s)"}
+              <p style={{ color: "#64748b", marginTop: 6, fontSize: "0.95rem" }}>
+                {isTelugu ? "వాయిస్ మరియు ఫోటోను సరిపోలుస్తున్నాము..." : "Comparing speech & photo against village civic issues..."}
               </p>
             </div>
           )}

@@ -27,6 +27,11 @@ def signup_requests(request):
         {
             "id": user.id,
             "username": user.username,
+            "full_name": user.full_name or user.username,
+            "mobile_number": user.mobile_number,
+            "village_name": user.village_name,
+            "street_name": user.street_name,
+            "house_number": user.house_number,
             "email": user.email,
             "aadhar": user.aadhar,
         }

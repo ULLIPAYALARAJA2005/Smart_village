@@ -16,8 +16,6 @@ import {
   fetchAdminWorkersListAPI,
   resetWorkerPasswordAPI,
 } from "../services/aiApi";
-import MainLayout from "../components/MainLayout";
-import { StatCard, StatusBadge, PageHeader } from "../components/UIComponents";
 
 import {
   BarChart,
@@ -545,10 +543,12 @@ export default function AdminDashboard() {
             {list.map(issue => (
               <div key={issue.id} className="issue-card super-modern animate-fadein">
                 <div className="issue-left">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                     <span className="category-tag" style={{ position: 'static', margin: 0 }}>{label(activeCategory)}</span>
-                    <span className="issue-title" style={{ marginRight: 8 }}>{issue.villagerName}</span>
-                    <span className="aadhaar-stamp">(Aadhaar: {issue.aadhar})</span>
+                    <span className="issue-title" style={{ marginRight: 8, fontSize: "1.05rem", fontWeight: 700 }}>
+                      {issue.citizen_name || issue.villagerName}
+                    </span>
+                    {issue.aadhar && <span className="aadhaar-stamp">(Aadhaar: {issue.aadhar})</span>}
                     {issue.input_method && issue.input_method !== 'manual' && (
                       <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 9999, padding: '2px 8px', fontWeight: 700 }}>
                         {issue.input_method === 'voice' ? '🎙️ Voice' : issue.input_method === 'photo' ? '📸 Photo' : '🎙️+📸 AI'}
@@ -560,24 +560,102 @@ export default function AdminDashboard() {
                       </span>
                     )}
                   </div>
-                  <div className="issue-meta" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
-                    <span><b>Street:</b> {issue.street}</span>
-                    {activeCategory !== "garbage" && <span><b>House No:</b> {issue.houseNo || 'N/A'}</span>}
-                    {issue.latitude && issue.longitude && (
-                      <span style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: 6, padding: '2px 8px', fontSize: '0.8rem', fontWeight: 600 }}>
-                        📍 GPS: {parseFloat(issue.latitude).toFixed(4)}, {parseFloat(issue.longitude).toFixed(4)}
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${issue.latitude},${issue.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ marginLeft: 6, color: '#059669', textDecoration: 'underline' }}
-                        >
-                          Maps ↗
-                        </a>
+
+                  {/* ── COMPLAINT REGISTERED BY (Section 4) ── */}
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1.5px solid #e2e8f0",
+                      borderRadius: "10px",
+                      padding: "10px 14px",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, borderBottom: "1px solid #e2e8f0", paddingBottom: 4, flexWrap: "wrap", gap: 4 }}>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#173B57", display: "flex", alignItems: "center", gap: 4 }}>
+                        <span>📋</span> Complaint Registered By (ఫిర్యాదు నమోదు చేసిన వివరాలు)
                       </span>
-                    )}
+                      <span style={{ fontSize: "0.75rem", background: "#e0f2fe", color: "#0369a1", padding: "2px 8px", borderRadius: 9999, fontWeight: 700 }}>
+                        ID #{issue.id} • {issue.status}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "6px 14px", fontSize: "0.83rem" }}>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>Full Name (పూర్తి పేరు):</span>
+                        <strong style={{ color: "#1e293b" }}>{issue.citizen_name || issue.villagerName}</strong>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>Mobile Number (మొబైల్ నంబర్):</span>
+                        {issue.citizen_phone ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                            <strong style={{ color: "#1e293b" }}>+91 {issue.citizen_phone}</strong>
+                            <a
+                              href={`tel:+91${issue.citizen_phone.replace(/\D/g, '')}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                                background: "#16a34a",
+                                color: "#ffffff",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                textDecoration: "none",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                              title="Call Citizen"
+                            >
+                              📞 Call
+                            </a>
+                          </div>
+                        ) : (
+                          <span style={{ color: "#94a3b8", fontStyle: "italic" }}>Not provided</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>Village (గ్రామం):</span>
+                        <strong style={{ color: "#1e293b" }}>{issue.village_name || "Bandepalli"}</strong>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>Street / Area (వీధి):</span>
+                        <strong style={{ color: "#1e293b" }}>{issue.street || "Main Road"}</strong>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>House No (ఇంటి నంబర్):</span>
+                        <strong style={{ color: "#1e293b" }}>{issue.house_no || issue.houseNo || "N/A"}</strong>
+                      </div>
+
+                      <div>
+                        <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>Date & Time (తేదీ & సమయం):</span>
+                        <strong style={{ color: "#1e293b" }}>{issue.date} {issue.time}</strong>
+                      </div>
+
+                      {issue.latitude && issue.longitude && (
+                        <div style={{ gridColumn: "1 / -1", marginTop: 2, background: "#ecfdf5", padding: "4px 8px", borderRadius: "6px" }}>
+                          <span style={{ color: "#065f46", fontSize: "0.78rem" }}>
+                            📍 <strong>GPS Coordinates:</strong> {parseFloat(issue.latitude).toFixed(6)}, {parseFloat(issue.longitude).toFixed(6)}
+                          </span>
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${issue.latitude},${issue.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ marginLeft: 8, color: "#047857", fontWeight: 700, fontSize: "0.78rem", textDecoration: "underline" }}
+                          >
+                            Open in Google Maps ↗
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="desc" style={{ marginBottom: 8 }}>{issue.description}</div>
+
+                  <div className="desc" style={{ marginBottom: 8, fontSize: "0.88rem", color: "#334155" }}>
+                    <strong>Description:</strong> {issue.description}
+                  </div>
                   {issue.ai_analysis && (
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#166534' }}>🤖 AI Analysis: </span>
@@ -686,100 +764,61 @@ export default function AdminDashboard() {
     }
   }, [popupMessage]);
 
-  const navSections = [
-    {
-      title: "Overview",
-      items: [
-        { key: "overview", label: "Dashboard Overview", icon: "📊" },
-      ],
-    },
-    {
-      title: "Management",
-      items: [
-        {
-          key: "assignments",
-          label: "Work Monitoring",
-          icon: "📋",
-          badge: pendingVerificationIssues.length > 0 ? `${pendingVerificationIssues.length} to verify` : undefined,
-        },
-        { key: "workers", label: "Manage Workers", icon: "👷", badge: adminWorkersDetailed.length },
-        { key: "requests", label: "Villager Approvals", icon: "👤", badge: requests.length > 0 ? `${requests.length} new` : undefined },
-      ],
-    },
-    {
-      title: "Village Services",
-      items: [
-        { key: "map", label: "GPS Complaint Map", icon: "🗺️", badge: allIssuesList.filter(i => i.location_captured).length },
-        { key: "announcements", label: "Announcements", icon: "📢" },
-        { key: "feedback", label: "Villager Feedback", icon: "⭐" },
-      ],
-    },
-    {
-      title: "Quick Action",
-      items: [
-        { key: "create-worker", label: "Add New Worker", icon: "➕" },
-      ],
-    },
-  ];
-
-  const handleNavSelect = (key) => {
-    if (key === "requests") {
-      setShowRequestPopup(true);
-    } else if (key === "create-worker") {
-      setShowCreateWorkerModal(true);
-    } else if (key === "feedback") {
-      navigate("/admin/feedback");
-    } else {
-      setAdminActiveTab(key);
-      if (key === "map" || key === "assignments" || key === "workers") {
-        loadGpsAndAssignmentData();
-      }
-      if (key === "assignments" && pendingVerificationIssues.length > 0) {
-        setMonitoringFilter("completed");
-      }
-    }
-  };
-
   return (
-    <MainLayout
-      pageTitle="Panchayat Administrative Portal"
-      role="admin"
-      userName="Panchayat Admin"
-      navSections={navSections}
-      activeNavKey={adminActiveTab}
-      onSelectNavKey={handleNavSelect}
-      onLogout={logout}
-    >
-      {/* ── HEADER & QUICK ACTIONS ── */}
-      <PageHeader
-        title="Village Governance & Civic Administration"
-        description="Centralized administration for issues, field workers, GPS mapping and public broadcasts"
-        actions={
-          <>
-            <button
-              type="button"
-              className="gov-btn gov-btn-secondary"
-              onClick={() => setShowCreateWorkerModal(true)}
-            >
-              <span>➕</span> Create Field Worker
-            </button>
-            <button
-              type="button"
-              className="gov-btn gov-btn-outline"
-              onClick={() => setShowRequestPopup(true)}
-            >
-              <span>👤</span> Signup Approvals ({requests.length})
-            </button>
-            <button
-              type="button"
-              className="gov-btn gov-btn-outline"
-              onClick={() => navigate("/admin/feedback")}
-            >
-              <span>⭐</span> Manage Feedbacks
-            </button>
-          </>
-        }
-      />
+
+    <div className="admin-container">
+      {/* NAVBAR */}
+      <div className="admin-navbar">
+        <h2 className="main-heading">Admin Dashboard</h2>
+        
+        {/* Mobile Hamburger */}
+        <button 
+          className="admin-hamburger" 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        >
+          {isMobileMenuOpen ? "✕" : "☰"}
+        </button>
+
+        <div className={`admin-right ${isMobileMenuOpen ? 'menu-open' : ''}`}>
+          <button
+            type="button"
+            className="premium-nav-btn"
+            style={{
+              background: adminActiveTab === "announcements" ? "#2563eb" : "#f8fafc",
+              color: adminActiveTab === "announcements" ? "#ffffff" : "#1e293b",
+              fontWeight: "700",
+              border: "1px solid #cbd5e1",
+            }}
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              setAdminActiveTab("announcements");
+            }}
+          >
+            <span className="n-icon">📢</span> Announcements
+          </button>
+          <button
+            type="button"
+            className="premium-nav-btn"
+            style={{ background: "#059669", color: "#fff", border: "none", fontWeight: "700" }}
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              setShowCreateWorkerModal(true);
+            }}
+          >
+            <span className="n-icon">➕</span> Create Worker
+          </button>
+          <button className="premium-nav-btn nav-feedback" onClick={() => { setIsMobileMenuOpen(false); navigate("/admin/feedback"); }}>
+            <span className="n-icon">📝</span> Manage Feedbacks
+          </button>
+          <button className="premium-nav-btn nav-requests" onClick={() => { setIsMobileMenuOpen(false); setShowRequestPopup(true); }}>
+            <span className="n-icon">👤</span> Signup Requests
+            {requests.length > 0 && <span className="notification-dot"></span>}
+          </button>
+          <button className="premium-nav-btn nav-logout" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>
+            <span className="n-icon">⏻</span> Logout
+          </button>
+        </div>
+      </div>
 
       {/* LOGOUT CONFIRMATION POPUP */}
       {showLogoutConfirm && (
@@ -822,17 +861,32 @@ export default function AdminDashboard() {
                 requests.map(user => (
                   <div key={user.id} className="request-card premium-request-card">
                     <div className="req-card-header">
-                      <div className="req-avatar">{user.username.charAt(0).toUpperCase()}</div>
+                      <div className="req-avatar">{(user.full_name || user.username).charAt(0).toUpperCase()}</div>
                       <div className="req-info">
-                        <h4>{user.username}</h4>
-
-                        <span className="req-email">{user.email}</span>
+                        <h4>{user.full_name || user.username}</h4>
+                        <span style={{ fontSize: "0.78rem", color: "#64748b" }}>@{user.username} • {user.email}</span>
                       </div>
                     </div>
-                    <div className="req-body">
+                    <div className="req-body" style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.82rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className="req-icon">📱</span>
+                        <span>Mobile: <b>{user.mobile_number ? `+91 ${user.mobile_number}` : "N/A"}</b></span>
+                        {user.mobile_number && (
+                          <a
+                            href={`tel:+91${user.mobile_number.replace(/\D/g, '')}`}
+                            style={{ background: "#16a34a", color: "#fff", padding: "1px 6px", borderRadius: 4, textDecoration: "none", fontSize: "0.72rem", fontWeight: 700 }}
+                          >
+                            📞 Call
+                          </a>
+                        )}
+                      </div>
+                      <div>
+                        <span className="req-icon">🏡</span>
+                        <span>Address: <b>{user.village_name || "Village"}, {user.street_name || "Street"}{user.house_number ? `, House #${user.house_number}` : ""}</b></span>
+                      </div>
                       <div className="req-badge">
                         <span className="req-icon">🪪</span>
-                      Aadhaar: <b>{user.aadhar || "Not provided"}</b>
+                        Aadhaar: <b>{user.aadhar || "Not provided"}</b>
                       </div>
                     </div>
 
@@ -871,6 +925,141 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* ── ADMIN NAVIGATION TABS ── */}
+      <div style={{ margin: "1rem auto", maxWidth: "1280px", padding: "0 1rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", background: "#ffffff", padding: "0.5rem", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setAdminActiveTab("overview")}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: adminActiveTab === "overview" ? "#2563eb" : "transparent",
+              color: adminActiveTab === "overview" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📊</span> Overview & Categories
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminActiveTab("map");
+              loadGpsAndAssignmentData();
+            }}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: adminActiveTab === "map" ? "#2563eb" : "transparent",
+              color: adminActiveTab === "map" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>🗺️</span> Village GPS Map ({allIssuesList.filter(i => i.location_captured).length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminActiveTab("assignments");
+              if (pendingVerificationIssues.length > 0) setMonitoringFilter("completed");
+              loadGpsAndAssignmentData();
+            }}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: adminActiveTab === "assignments" ? "#2563eb" : "transparent",
+              color: adminActiveTab === "assignments" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📋</span> Work Monitoring
+            {pendingVerificationIssues.length > 0 && (
+              <span style={{ background: "#dc2626", color: "#ffffff", padding: "2px 7px", borderRadius: "9999px", fontSize: "0.72rem", fontWeight: "800" }}>
+                🔔 {pendingVerificationIssues.length} to Verify!
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdminActiveTab("workers");
+              loadGpsAndAssignmentData();
+            }}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: adminActiveTab === "workers" ? "#2563eb" : "transparent",
+              color: adminActiveTab === "workers" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>👷</span> Workers & Credentials ({adminWorkersDetailed.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminActiveTab("announcements")}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: adminActiveTab === "announcements" ? "#2563eb" : "transparent",
+              color: adminActiveTab === "announcements" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📢</span> Village Announcements (ప్రకటనలు)
+          </button>
+        </div>
+      </div>
 
       {/* ── TAB 1: OVERVIEW & CATEGORY ISSUES ── */}
       {adminActiveTab === "overview" && (
@@ -1198,7 +1387,18 @@ export default function AdminDashboard() {
                               Issue #{issue.id} — {issue.category?.toUpperCase()}
                             </span>
                             <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                              Reported by {issue.villagerName} ({issue.street}{issue.house_no ? `, #${issue.house_no}` : ""})
+                              Reported by <strong>{issue.citizen_name || issue.villagerName}</strong> ({issue.village_name ? `${issue.village_name}, ` : ""}{issue.street}{issue.house_no ? `, #${issue.house_no}` : ""})
+                              {issue.citizen_phone && (
+                                <span style={{ marginLeft: "8px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                  📱 +91 {issue.citizen_phone}
+                                  <a
+                                    href={`tel:+91${issue.citizen_phone.replace(/\D/g, '')}`}
+                                    style={{ background: "#16a34a", color: "#fff", padding: "1px 6px", borderRadius: 4, textDecoration: "none", fontSize: "0.72rem", fontWeight: 700 }}
+                                  >
+                                    📞 Call
+                                  </a>
+                                </span>
+                              )}
                             </span>
                           </div>
 
@@ -1598,6 +1798,9 @@ export default function AdminDashboard() {
         </div>
       )}
 
-    </MainLayout>
+
+    </div>
+
   );
+
 }

@@ -235,9 +235,110 @@ export default function WorkerAssignmentCard({ item, onUpdate, showToast }) {
         <strong>Description:</strong> {item.description}
       </div>
 
-      {/* Address & House */}
-      <div style={{ fontSize: "0.85rem", color: "#475569", background: "#f8fafc", padding: "0.55rem 0.75rem", borderRadius: "6px" }}>
-        📍 <strong>Location:</strong> {item.street} {item.house_no ? `(House #${item.house_no})` : ""}
+      {/* ── VILLAGER CONTACT & RESIDENTIAL ADDRESS INFORMATION ── */}
+      <div
+        style={{
+          background: "#f0fdf4",
+          border: "1.5px solid #86efac",
+          borderRadius: "10px",
+          padding: "1rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.6rem",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #bbf7d0", paddingBottom: "0.4rem", flexWrap: "wrap", gap: "0.3rem" }}>
+          <h5 style={{ margin: 0, fontSize: "0.92rem", fontWeight: "700", color: "#166534", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <span>👤</span> Villager Contact Information (సంప్రదింపు వివరాలు)
+          </h5>
+          {(item.citizen_phone || item.mobile_number) && (
+            <span style={{ fontSize: "0.75rem", background: "#dcfce7", color: "#15803d", fontWeight: "700", padding: "2px 8px", borderRadius: "9999px" }}>
+              ✓ Verified Contact
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.6rem", fontSize: "0.85rem", color: "#1e293b" }}>
+          <div>
+            <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", fontWeight: 600 }}>Citizen Name (పౌరుడి పేరు):</span>
+            <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>
+              {item.citizen_name || item.villagerName || "Citizen"}
+            </strong>
+          </div>
+
+          <div>
+            <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", fontWeight: 600 }}>Mobile Number (మొబైల్ నంబర్):</span>
+            <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>
+              {item.citizen_phone ? `+91 ${item.citizen_phone}` : (item.mobile_number ? `+91 ${item.mobile_number}` : "Not Available")}
+            </strong>
+          </div>
+        </div>
+
+        <div style={{ fontSize: "0.85rem", color: "#334155", background: "#ffffff", padding: "0.6rem 0.75rem", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+          <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", marginBottom: "2px", fontWeight: 600 }}>
+            Residential Address (నివాస చిరునామా):
+          </span>
+          <div style={{ color: "#0f172a", fontWeight: 600 }}>
+            {item.village_name ? `${item.village_name} Village, ` : ""}
+            {item.street || "Main Road"}
+            {(item.house_no || item.houseNo) ? `, House No: ${item.house_no || item.houseNo}` : ""}
+          </div>
+        </div>
+
+        {/* Action Buttons: 1. Call Villager  2. Navigate to Location */}
+        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginTop: "0.3rem", alignItems: "center" }}>
+          {(item.citizen_phone || item.mobile_number) ? (
+            <a
+              href={`tel:+91${(item.citizen_phone || item.mobile_number).replace(/\D/g, '')}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.6rem 1.1rem",
+                background: "#16a34a",
+                color: "#ffffff",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "700",
+                fontSize: "0.88rem",
+                boxShadow: "0 2px 5px rgba(22, 163, 74, 0.3)",
+              }}
+            >
+              <span>📞</span> Call Villager (+91 {item.citizen_phone || item.mobile_number})
+            </a>
+          ) : (
+            <span style={{ fontSize: "0.82rem", color: "#64748b", fontStyle: "italic" }}>
+              Mobile number not provided
+            </span>
+          )}
+
+          {hasGps ? (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.6rem 1.1rem",
+                background: "#0284c7",
+                color: "#ffffff",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "700",
+                fontSize: "0.88rem",
+                boxShadow: "0 2px 5px rgba(2, 132, 199, 0.3)",
+              }}
+            >
+              <span>🧭</span> Navigate to Location (GPS)
+            </a>
+          ) : (
+            <div style={{ fontSize: "0.82rem", color: "#b45309", background: "#fef3c7", border: "1px solid #fde68a", padding: "0.5rem 0.75rem", borderRadius: "6px" }}>
+              ⚠️ GPS coordinates not captured. Use registered address above ({item.village_name || "Village"}, {item.street || "Street"}, House #{item.house_no || item.houseNo || "N/A"}) to locate citizen.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Admin Instructions */}

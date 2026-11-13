@@ -8,8 +8,6 @@ import GPSLocationPicker from "../components/GPSLocationPicker";
 import { updateComplaintAPI, deleteComplaintAPI } from "../services/aiApi";
 import VillagerAnnouncementsSection from "../components/VillagerAnnouncementsSection";
 import { fetchAnnouncementStatsSummaryAPI } from "../services/announcementApi";
-import MainLayout from "../components/MainLayout";
-import { StatCard, StatusBadge, PageHeader } from "../components/UIComponents";
 
 const getImageUrl = (photo) => {
   if (!photo) return null;
@@ -93,13 +91,13 @@ function ProgressTimeline({ status }) {
   );
 }
 
-export default function VillagerDashboard() {
+export default function VillagerDashboard({ initialTab = "my-complaints" }) {
   const navigate = useNavigate();
   const userName = localStorage.getItem("userName") || "Citizen";
   const userId = localStorage.getItem("userId");
 
-  // Main navigation tab: "my-complaints" | "new-complaint" | "community" | "announcements"
-  const [activeTab, setActiveTab] = useState("my-complaints");
+  // Main navigation tab: "my-complaints" | "new-complaint" | "community" | "announcements" | "my-profile"
+  const [activeTab, setActiveTab] = useState(initialTab);
   // Increments each time the announcements tab is activated → forces VillagerAnnouncementsSection to remount & refetch
   const [announcementsKey, setAnnouncementsKey] = useState(0);
 
@@ -111,6 +109,23 @@ export default function VillagerDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [userInfo, setUserInfo] = useState({ email: "", aadhar: "" });
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem("userProfile");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    mobile_number: "",
+    village_name: "",
+    street_name: "",
+    house_number: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+
   const [myIssues, setMyIssues] = useState([]);
   const [allCommunityIssues, setAllCommunityIssues] = useState([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, assigned: 0, progress: 0, resolved: 0 });
@@ -216,22 +231,131 @@ export default function VillagerDashboard() {
     }, 800);
   };
 
-  // ── Fetch user profile info ──
+  // ── Fetch user profile info & residential address ──
   useEffect(() => {
     fetch("/api/auth/csrf/", { credentials: "same-origin" });
     const fetchUserInfo = async () => {
       try {
-        const res = await fetch(`/api/auth/users/${userId}/`);
+        const res = await fetch("/api/auth/profile/", { credentials: "same-origin" });
         if (res.ok) {
           const data = await res.json();
+          setUserProfile(data);
           setUserInfo({ email: data.email, aadhar: data.aadhar });
+          setProfileForm({
+            full_name: data.full_name || "",
+            mobile_number: data.mobile_number || "",
+            village_name: data.village_name || "",
+            street_name: data.street_name || "",
+            house_number: data.house_number || "",
+          });
+          localStorage.setItem("userProfile", JSON.stringify(data));
+          if (data.full_name) localStorage.setItem("userFullName", data.full_name);
+          if (data.mobile_number) localStorage.setItem("userMobile", data.mobile_number);
+          if (data.village_name) localStorage.setItem("userVillage", data.village_name);
+          if (data.street_name) localStorage.setItem("userStreet", data.street_name);
+          if (data.house_number) localStorage.setItem("userHouse", data.house_number);
+
+          // Prefill complaint form street & houseNo if currently empty
+          setFormData((prev) => ({
+            ...prev,
+            street: prev.street || data.street_name || "",
+            houseNo: prev.houseNo || data.house_number || "",
+          }));
+        } else {
+          const resFallback = await fetch(`/api/auth/users/${userId}/`);
+          if (resFallback.ok) {
+            const dataOld = await resFallback.json();
+            setUserInfo({ email: dataOld.email, aadhar: dataOld.aadhar });
+          }
         }
-      } catch {
-        console.warn("Could not load user profile");
+      } catch (err) {
+        console.warn("Could not load user profile", err);
       }
     };
     if (userId) fetchUserInfo();
   }, [userId]);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (savingProfile) return;
+
+    if (!profileForm.full_name.trim()) {
+      showToast("Full Name is mandatory", "error");
+      return;
+    }
+    const cleanPhone = profileForm.mobile_number.trim();
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      showToast("Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)", "error");
+      return;
+    }
+    if (!profileForm.village_name.trim()) {
+      showToast("Village Name is mandatory", "error");
+      return;
+    }
+    if (!profileForm.street_name.trim()) {
+      showToast("Street / Area Name is mandatory", "error");
+      return;
+    }
+    if (!profileForm.house_number.trim()) {
+      showToast("House Number is mandatory", "error");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      if (!getCookie("csrftoken")) {
+        await fetch("/api/auth/csrf/", { credentials: "same-origin" });
+      }
+      const csrfToken = getCookie("csrftoken");
+      const res = await fetch("/api/auth/profile/", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+        },
+        body: JSON.stringify({
+          full_name: profileForm.full_name.trim(),
+          mobile_number: cleanPhone,
+          village_name: profileForm.village_name.trim(),
+          street_name: profileForm.street_name.trim(),
+          house_number: profileForm.house_number.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        let msg = "Failed to update profile";
+        if (data.message) msg = data.message;
+        else if (typeof data === "object") {
+          msg = Object.values(data).flat().join(", ");
+        }
+        showToast(msg, "error");
+        return;
+      }
+
+      const updated = data.user || data;
+      setUserProfile(updated);
+      localStorage.setItem("userProfile", JSON.stringify(updated));
+      localStorage.setItem("userFullName", updated.full_name);
+      localStorage.setItem("userMobile", updated.mobile_number);
+      localStorage.setItem("userVillage", updated.village_name);
+      localStorage.setItem("userStreet", updated.street_name);
+      localStorage.setItem("userHouse", updated.house_number);
+
+      setFormData((prev) => ({
+        ...prev,
+        street: updated.street_name || prev.street,
+        houseNo: updated.house_number || prev.houseNo,
+      }));
+
+      showToast("🎉 Profile & Address updated! (ప్రొఫైల్ మరియు చిరునామా భద్రపరచబడింది)", "success");
+    } catch (err) {
+      showToast(err.message || "Failed to save profile", "error");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   // ── Real-time Fetch All Complaints ──
   const fetchIssues = useCallback(async () => {
@@ -312,8 +436,8 @@ export default function VillagerDashboard() {
 
   const resetForm = () => {
     setFormData({
-      street: "",
-      houseNo: "",
+      street: userProfile?.street_name || "",
+      houseNo: userProfile?.house_number || "",
       description: "",
       photo: null,
       priority: "medium",
@@ -330,13 +454,17 @@ export default function VillagerDashboard() {
     if (submitLoading) return;
 
     if (!selectedCategory) return showToast("Please select an issue category", "error");
-    if (!formData.street.trim()) return showToast("Street name / landmark is required", "error");
+
+    const finalStreet = (formData.street || userProfile?.street_name || "").trim();
+    const finalHouseNo = (formData.houseNo || userProfile?.house_number || "").trim();
+
+    if (!finalStreet) return showToast("Street name / landmark is required", "error");
     if (!formData.description.trim()) return showToast("Problem description is required", "error");
 
     setSubmitLoading(true);
     const data = new FormData();
-    data.append("street", formData.street);
-    data.append("houseNo", formData.houseNo || "");
+    data.append("street", finalStreet);
+    data.append("houseNo", finalHouseNo);
     data.append("description", formData.description);
     if (formData.photo) data.append("photo", formData.photo);
     data.append("priority", formData.priority || "medium");
@@ -397,113 +525,335 @@ export default function VillagerDashboard() {
     return true;
   });
 
-  const navSections = [
-    {
-      title: "Navigation",
-      items: [
-        { key: "my-complaints", label: "My Complaints (నా ఫిర్యాదులు)", icon: "📋", badge: myIssues.length },
-        { key: "new-complaint", label: "Submit Complaint (ఫిర్యాదు)", icon: "✍️" },
-        { key: "community", label: "Community Feed (గ్రామ సమాచారం)", icon: "🏘️", badge: allCommunityIssues.length },
-        { key: "announcements", label: "Announcements (ప్రకటనలు)", icon: "📢", badge: announcementStats.unread_count || undefined },
-      ],
-    },
-    {
-      title: "Actions & Voice",
-      items: [
-        { key: "voice-complaint", label: "Voice Complaint (వాయిస్)", icon: "🎙️" },
-        { key: "voice-status", label: "Voice Status Check", icon: "🔍" },
-        { key: "feedback", label: "Give Feedback (ఫీడ్‌బ్యాక్)", icon: "⭐" },
-      ],
-    },
-  ];
-
-  const handleNavSelect = (key) => {
-    if (key === "voice-complaint") {
-      setShowVoiceModal(true);
-    } else if (key === "voice-status") {
-      setShowVoiceTracker(true);
-    } else if (key === "feedback") {
-      navigate("/villager/feedback");
-    } else {
-      setActiveTab(key);
-      if (key === "announcements") setAnnouncementsKey((k) => k + 1);
-    }
-  };
-
   return (
-    <MainLayout
-      pageTitle="Citizen Portal (గ్రామస్థుల వేదిక)"
-      role="villager"
-      userName={userName}
-      navSections={navSections}
-      activeNavKey={activeTab}
-      onSelectNavKey={handleNavSelect}
-      onLogout={() => setShowLogoutConfirm(true)}
-    >
+    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Poppins', sans-serif", color: "#1e293b" }}>
       {toast && <Toast message={toast.message} type={toast.type} />}
 
-      {/* ── USER WELCOME & REAL-TIME STATS GRID ── */}
-      <div style={{ marginBottom: "1.75rem" }}>
-        <PageHeader
-          title={`Namaste, ${userName}!`}
-          description={userInfo.aadhar ? `Aadhaar: ${userInfo.aadhar} · Citizen ID #${userId} · ${userInfo.email || "Registered Villager"}` : `Citizen ID #${userId} · Fix My Village Portal`}
-          actions={
-            <>
-              <button
-                type="button"
-                className="gov-btn gov-btn-secondary"
-                onClick={() => setShowVoiceModal(true)}
-              >
-                <span>🎙️</span> AI Voice Complaint
-              </button>
-              <button
-                type="button"
-                className="gov-btn gov-btn-outline"
-                onClick={() => setShowVoiceTracker(true)}
-              >
-                <span>🔍</span> Voice Status
-              </button>
-            </>
-          }
-        />
+      {/* ── TOP MODERN NAVBAR ── */}
+      <header
+        style={{
+          background: "#ffffff",
+          borderBottom: "1px solid #e2e8f0",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0.85rem 1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Logo & Portal Info */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ width: 42, height: 42, borderRadius: "10px", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.4rem", fontWeight: "700", boxShadow: "0 4px 10px rgba(37,99,235,0.3)" }}>
+              🏘️
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <h1 style={{ margin: 0, fontSize: "1.15rem", fontWeight: "800", color: "#0f172a" }}>Fix My Village</h1>
+                <span style={{ background: "#dcfce7", color: "#166534", fontSize: "0.72rem", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontWeight: "700" }}>
+                  🟢 Live Citizen Portal
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>Community Issue Reporting & Governance</p>
+            </div>
+          </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
-          <StatCard
-            title="My Complaints"
-            value={stats.total}
-            subtext="Total grievances filed"
-            icon="📋"
-            iconBg="var(--color-info-bg)"
-            iconColor="var(--color-info)"
+          {/* Quick Action Buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <button
+              type="button"
+              onClick={() => setShowVoiceModal(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.5rem 0.9rem",
+                background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "700",
+                fontSize: "0.85rem",
+                boxShadow: "0 2px 6px rgba(124, 58, 237, 0.3)",
+              }}
+            >
+              <span>🎙️</span> AI Voice Complaint
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowVoiceTracker(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                padding: "0.5rem 0.85rem",
+                background: "#f1f5f9",
+                color: "#334155",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span>🔍</span> Voice Status
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("my-profile")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+                padding: "0.5rem 0.85rem",
+                background: activeTab === "my-profile" ? "#2563eb" : "#f1f5f9",
+                color: activeTab === "my-profile" ? "#ffffff" : "#1e293b",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span>👤</span> My Profile (నా ప్రొఫైల్)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/villager/feedback")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+                padding: "0.5rem 0.75rem",
+                background: "#f8fafc",
+                color: "#475569",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span>⭐</span> Feedback
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              style={{
+                padding: "0.5rem 0.8rem",
+                background: "#fee2e2",
+                color: "#b91c1c",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "700",
+                fontSize: "0.85rem",
+              }}
+            >
+              ⏻ Logout
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── USER WELCOME & REAL-TIME SUMMARY STRIP ── */}
+      <div style={{ maxWidth: "1240px", margin: "1.25rem auto 0", padding: "0 1.25rem" }}>
+        <div
+          style={{
+            background: "linear-gradient(135deg, #173B57 0%, #112E44 100%)",
+            color: "#ffffff",
+            borderRadius: "14px",
+            padding: "1.25rem 1.5rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+            boxShadow: "0 4px 15px rgba(23, 59, 87, 0.2)",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+              <span style={{ fontSize: "1.4rem" }}>👋</span>
+              <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "700" }}>
+                Welcome, {userProfile?.full_name || userName}!
+              </h2>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "#94a3b8" }}>
+              {userProfile?.mobile_number ? `📱 +91 ${userProfile.mobile_number} · ` : ""}
+              {userProfile?.village_name ? `🏡 ${userProfile.village_name} (${userProfile.street_name || "Street"}, #${userProfile.house_number || "House"}) · ` : ""}
+              Citizen ID #{userId} · {userInfo.email || "Registered Villager"}
+            </p>
+          </div>
+
+          {/* Quick Metrics */}
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
+              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#60a5fa" }}>{stats.total}</span>
+              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>My Complaints</span>
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
+              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#facc15" }}>{stats.pending + stats.assigned}</span>
+              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Pending / Assigned</span>
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
+              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#38bdf8" }}>{stats.progress}</span>
+              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>In Progress</span>
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.08)", padding: "0.5rem 0.9rem", borderRadius: "8px", textAlign: "center", minWidth: "90px" }}>
+              <span style={{ fontSize: "1.3rem", fontWeight: "800", display: "block", color: "#4ade80" }}>{stats.resolved}</span>
+              <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Resolved</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── CLEAN TAB DIVISION (Real-time, Uncluttered) ── */}
+      <div style={{ maxWidth: "1240px", margin: "1.25rem auto", padding: "0 1.25rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", background: "#ffffff", padding: "0.4rem", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", flexWrap: "wrap" }}>
+          <button
+            type="button"
             onClick={() => setActiveTab("my-complaints")}
-          />
-          <StatCard
-            title="Pending / Assigned"
-            value={stats.pending + stats.assigned}
-            subtext="Awaiting work completion"
-            icon="⏳"
-            iconBg="var(--color-warning-bg)"
-            iconColor="var(--color-warning)"
-            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("active"); }}
-          />
-          <StatCard
-            title="In Progress"
-            value={stats.progress}
-            subtext="Worker actively on-site"
-            icon="⚡"
-            iconBg="#e0e7ff"
-            iconColor="#4338ca"
-            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("active"); }}
-          />
-          <StatCard
-            title="Resolved"
-            value={stats.resolved}
-            subtext="Successfully completed"
-            icon="✅"
-            iconBg="var(--color-success-bg)"
-            iconColor="var(--color-success)"
-            onClick={() => { setActiveTab("my-complaints"); setMyStatusFilter("resolved"); }}
-          />
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: activeTab === "my-complaints" ? "#2563eb" : "transparent",
+              color: activeTab === "my-complaints" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📋</span> My Complaints (నా ఫిర్యాదులు)
+            <span
+              style={{
+                background: activeTab === "my-complaints" ? "rgba(255,255,255,0.25)" : "#e2e8f0",
+                color: activeTab === "my-complaints" ? "#ffffff" : "#334155",
+                fontSize: "0.75rem",
+                padding: "0.15rem 0.5rem",
+                borderRadius: "9999px",
+              }}
+            >
+              {myIssues.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("new-complaint")}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: activeTab === "new-complaint" ? "#2563eb" : "transparent",
+              color: activeTab === "new-complaint" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>✍️</span> File New Complaint (ఫిర్యాదు చేయండి)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("community")}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: activeTab === "community" ? "#2563eb" : "transparent",
+              color: activeTab === "community" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>🏘️</span> Village Community Feed ({allCommunityIssues.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setActiveTab("announcements"); setAnnouncementsKey(k => k + 1); }}
+            style={{
+              flex: "1 1 200px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: activeTab === "announcements" ? "#2563eb" : "transparent",
+              color: activeTab === "announcements" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📢</span> Announcements (గ్రామ ప్రకటనలు)
+            {announcementStats.unread_count > 0 && (
+              <span
+                style={{
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  padding: "2px 7px",
+                  borderRadius: "9999px",
+                  fontSize: "0.72rem",
+                  fontWeight: "800",
+                }}
+              >
+                {announcementStats.unread_count} New
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("my-profile")}
+            style={{
+              flex: "1 1 180px",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              border: "none",
+              background: activeTab === "my-profile" ? "#2563eb" : "transparent",
+              color: activeTab === "my-profile" ? "#ffffff" : "#475569",
+              fontWeight: "700",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>👤</span> My Profile (నా ప్రొఫైల్)
+          </button>
         </div>
       </div>
 
@@ -1493,6 +1843,6 @@ export default function VillagerDashboard() {
           </div>
         </div>
       )}
-    </MainLayout>
+    </div>
   );
 }

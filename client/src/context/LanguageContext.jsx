@@ -169,6 +169,27 @@ export const translations = {
     footerPortals: "Role Portals",
     footerLegal: "Public Information",
     footerRights: "All rights reserved. Dedicated to rural community advancement.",
+
+    // Contact & Profile & Address strings
+    fullName: "Full Name",
+    mobileNumber: "Mobile Number",
+    villageName: "Village Name",
+    streetName: "Street / Area Name",
+    houseNumber: "House Number",
+    username: "Username",
+    emailAddress: "Email Address",
+    password: "Password",
+    confirmPassword: "Confirm Password",
+    callVillager: "Call Villager",
+    navigateToLocation: "Navigate to Location",
+    contactInformation: "Contact Information",
+    complaintRegisteredBy: "Complaint Registered By",
+    citizenName: "Citizen Name",
+    myProfile: "My Profile",
+    editAddress: "Edit Address",
+    updateProfile: "Update Profile",
+    saveChanges: "Save Changes",
+    registeredAddress: "Registered Residential Address",
   },
 
   te: {
@@ -339,6 +360,27 @@ export const translations = {
     footerPortals: "పోర్టల్స్",
     footerLegal: "సమాచార హక్కు & నియమాలు",
     footerRights: "అన్ని హక్కులూ ప్రత్యేకించబడ్డాయి. గ్రామీణ సేవకు అంకితం.",
+
+    // Contact & Profile & Address strings
+    fullName: "పూర్తి పేరు",
+    mobileNumber: "మొబైల్ నంబర్",
+    villageName: "గ్రామం పేరు",
+    streetName: "వీధి / ప్రాంతం పేరు",
+    houseNumber: "ఇంటి నంబర్",
+    username: "యూజర్ నేమ్",
+    emailAddress: "ఈమెయిల్ చిరునామా",
+    password: "పాస్వర్డ్",
+    confirmPassword: "పాస్వర్డ్ నిర్ధారించండి",
+    callVillager: "ఫిర్యాదు చేసిన వ్యక్తికి కాల్ చేయండి",
+    navigateToLocation: "సమస్య ఉన్న ప్రదేశానికి వెళ్లండి",
+    contactInformation: "సంప్రదింపు వివరాలు",
+    complaintRegisteredBy: "ఫిర్యాదు నమోదు చేసిన వివరాలు",
+    citizenName: "పౌరుడి పేరు",
+    myProfile: "నా ప్రొఫైల్",
+    editAddress: "చిరునామా సవరించండి",
+    updateProfile: "ప్రొఫైల్ అప్‌డేట్ చేయండి",
+    saveChanges: "మార్పులను భద్రపరచండి",
+    registeredAddress: "నమోదిత నివాస చిరునామా",
   }
 };
 

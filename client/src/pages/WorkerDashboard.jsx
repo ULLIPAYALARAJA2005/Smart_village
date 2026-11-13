@@ -4,8 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { SkeletonBox } from "../components/Skeleton";
 import WorkerAssignmentCard from "../components/WorkerAssignmentCard";
 import { fetchMyAssignmentsAPI } from "../services/aiApi";
-import MainLayout from "../components/MainLayout";
-import { StatCard, StatusBadge, PageHeader } from "../components/UIComponents";
 import {
   PieChart, Pie, Cell, ResponsiveContainer,
   Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -262,47 +260,9 @@ export default function WorkerDashboard() {
     drainage: { icon: "🚰", label: "Drainage", color: "#7c3aed", bg: "linear-gradient(135deg,#ddd6fe,#7c3aed)" },
   };
 
-  const navSections = [
-    {
-      title: "Field Tasks",
-      items: [
-        { key: "all", label: "All Assigned Tasks", icon: "📋", badge: myAssignments.length },
-        { key: "active", label: "Active Pending Tasks", icon: "⏳", badge: myAssignments.filter(a => a.status !== "Completed" && a.assignment?.work_status !== "Completed").length },
-        { key: "completed", label: "Completed Tasks", icon: "✅" },
-      ],
-    },
-    {
-      title: "Departments",
-      items: [
-        { key: "electricity", label: "Electricity (విద్యుత్)", icon: "⚡" },
-        { key: "water", label: "Water (మంచినీరు)", icon: "💧" },
-        { key: "garbage", label: "Garbage (పారిశుధ్యం)", icon: "🗑" },
-        { key: "drainage", label: "Drainage (మురుగు)", icon: "🚰" },
-      ],
-    },
-  ];
-
-  const handleNavSelect = (key) => {
-    if (["all", "active", "completed"].includes(key)) {
-      setAssignmentFilter(key);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (["electricity", "water", "garbage", "drainage"].includes(key)) {
-      setActiveCategory(key);
-      const el = document.querySelector(".wd-cat-section");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
   return (
-    <MainLayout
-      pageTitle="Field Worker Dashboard"
-      role="worker"
-      userName={localStorage.getItem("userName") || "Worker"}
-      navSections={navSections}
-      activeNavKey={assignmentFilter}
-      onSelectNavKey={handleNavSelect}
-      onLogout={logout}
-    >
+    <div className="worker-container">
+
       {/* ── TOAST ── */}
       {popup.show && (
         <div className={`wd-toast ${popup.type === "error" ? "wd-toast--error" : "wd-toast--success"}`}>
@@ -345,40 +305,13 @@ export default function WorkerDashboard() {
         </div>
       )}
 
-      {/* ── STATS CARDS ── */}
-      <PageHeader
-        title="Field Worker Operations"
-        description="Assigned Panchayat tasks with GPS Navigation & live verification"
-      />
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.75rem" }}>
-        <StatCard
-          title="Total Assigned"
-          value={myAssignments.length}
-          subtext="Total tasks assigned to you"
-          icon="📋"
-          iconBg="var(--color-info-bg)"
-          iconColor="var(--color-info)"
-          onClick={() => setAssignmentFilter("all")}
-        />
-        <StatCard
-          title="Active Pending"
-          value={myAssignments.filter(a => a.status !== "Completed" && a.assignment?.work_status !== "Completed").length}
-          subtext="Awaiting on-site resolution"
-          icon="⏳"
-          iconBg="var(--color-warning-bg)"
-          iconColor="var(--color-warning)"
-          onClick={() => setAssignmentFilter("active")}
-        />
-        <StatCard
-          title="Completed"
-          value={myAssignments.filter(a => a.status === "Completed" || a.assignment?.work_status === "Completed").length}
-          subtext="Finished tasks"
-          icon="✅"
-          iconBg="var(--color-success-bg)"
-          iconColor="var(--color-success)"
-          onClick={() => setAssignmentFilter("completed")}
-        />
+      {/* ── NAVBAR ── */}
+      <div className="worker-navbar">
+        <div className="wd-nav-brand">
+          <span className="wd-nav-dot" />
+          <h2 className="wd-nav-title">Worker Dashboard</h2>
+        </div>
+        <button className="logout-btn" onClick={logout}>Logout</button>
       </div>
 
       {/* ── MY ASSIGNED WORKS & GPS SMART NAVIGATION ── */}
@@ -590,6 +523,6 @@ export default function WorkerDashboard() {
         {activeCategory && renderTasks()}
       </div>
 
-    </MainLayout>
+    </div>
   );
 }

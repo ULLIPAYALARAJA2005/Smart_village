@@ -112,7 +112,13 @@ export default function Login() {
       // Save session information
       localStorage.setItem("role", data.role);
       localStorage.setItem("userId", data.user.id);
-      localStorage.setItem("userName", data.user.name);
+      localStorage.setItem("userName", data.user.name || data.user.username);
+      if (data.user.full_name) localStorage.setItem("userFullName", data.user.full_name);
+      if (data.user.mobile_number) localStorage.setItem("userMobile", data.user.mobile_number);
+      if (data.user.village_name) localStorage.setItem("userVillage", data.user.village_name);
+      if (data.user.street_name) localStorage.setItem("userStreet", data.user.street_name);
+      if (data.user.house_number) localStorage.setItem("userHouse", data.user.house_number);
+      localStorage.setItem("userProfile", JSON.stringify(data.user));
 
       showToast(
         "Login Successful",
@@ -165,9 +171,12 @@ export default function Login() {
       )}
 
       <div className="login-card">
-        <div className="login-header-emblem">🏛️</div>
-        <h2>Fix My Village</h2>
-        <p className="subtitle">Sign in to your Village Portal Account</p>
+
+        <h2>FixMyVillage Login</h2>
+
+        <p className="subtitle">
+          Access the civic issue platform
+        </p>
 
         <form onSubmit={handleSubmit}>
 
