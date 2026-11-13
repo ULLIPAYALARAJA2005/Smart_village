@@ -10,7 +10,18 @@ const BACKEND_URL = (import.meta.env.VITE_API_URL || "https://smartvillage-api-t
 
 if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
   const originalFetch = window.fetch;
-  window.fetch = function (url, options = {}) {
+  // Pre‑fetch CSRF token once and store it locally
+  let csrfPromise = fetch(`${BACKEND_URL}/api/auth/csrf/`, { credentials: "include" })
+    .then(r => r.json())
+    .then(data => {
+      if (data.csrfToken) {
+        localStorage.setItem("csrfToken", data.csrfToken);
+      }
+      return data.csrfToken;
+    })
+    .catch(() => null);
+
+  window.fetch = async function (url, options = {}) {
     let finalUrl = url;
     if (typeof url === "string") {
       if (url.startsWith("/api/") || url === "/api") {
@@ -19,10 +30,21 @@ if (typeof window !== "undefined" && window.location.hostname !== "localhost" &&
         finalUrl = `${BACKEND_URL}${url}`;
       }
     }
+    const method = (options.method || "GET").toUpperCase();
     const newOptions = {
       ...options,
       credentials: options.credentials || "include",
     };
+    // Attach CSRF header for state‑changing requests
+    if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+      const token = localStorage.getItem("csrfToken") || await csrfPromise;
+      if (token) {
+        newOptions.headers = {
+          ...(newOptions.headers || {}),
+          "X-CSRFToken": token,
+        };
+      }
+    }
     return originalFetch(finalUrl, newOptions);
   };
 }
