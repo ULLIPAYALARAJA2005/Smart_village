@@ -770,10 +770,10 @@ export default function AdminDashboard() {
       {/* NAVBAR */}
       <div className="admin-navbar">
         <h2 className="main-heading">Admin Dashboard</h2>
-        
+
         {/* Mobile Hamburger */}
-        <button 
-          className="admin-hamburger" 
+        <button
+          className="admin-hamburger"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
           {isMobileMenuOpen ? "✕" : "☰"}
@@ -1131,147 +1131,147 @@ export default function AdminDashboard() {
 
           {/* DASHBOARD STATISTICS */}
           <div className="stats-section">
-        <h2 className="main-heading">Dashboard Statistics</h2>
-        <div className="stats-cards">
-          {loadingData ? (
-            Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="stat-card"><SkeletonBox height={38} /></div>
-            ))
-          ) : (
-            <>
-              <div className="stat-card">Total<br />{stats.total}</div>
-              <div className="stat-card pending">Pending<br />{stats.pending}</div>
-              <div className="stat-card assigned">Assigned<br />{stats.assigned}</div>
-              <div className="stat-card progress">Progress<br />{stats.progress}</div>
-              <div className="stat-card resolved">Resolved<br />{stats.resolved}</div>
-              <div className="stat-card rejected">Rejected<br />{stats.rejected}</div>
-            </>
-          )}
-        </div>
-        <div className="charts">
-          <div className="chart-box">
-            <h3 className="sub-heading">Status Distribution</h3>
+            <h2 className="main-heading">Dashboard Statistics</h2>
+            <div className="stats-cards">
+              {loadingData ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="stat-card"><SkeletonBox height={38} /></div>
+                ))
+              ) : (
+                <>
+                  <div className="stat-card">Total<br />{stats.total}</div>
+                  <div className="stat-card pending">Pending<br />{stats.pending}</div>
+                  <div className="stat-card assigned">Assigned<br />{stats.assigned}</div>
+                  <div className="stat-card progress">Progress<br />{stats.progress}</div>
+                  <div className="stat-card resolved">Resolved<br />{stats.resolved}</div>
+                  <div className="stat-card rejected">Rejected<br />{stats.rejected}</div>
+                </>
+              )}
+            </div>
+            <div className="charts">
+              <div className="chart-box">
+                <h3 className="sub-heading">Status Distribution</h3>
+                {loadingData ? (
+                  <SkeletonBox height={250} />
+                ) : (
+                  <div className="responsive-chart-container">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie data={chartData} dataKey="value" outerRadius={80}>
+                          {chartData.map((entry, index) => (
+                            <Cell key={index} fill={COLORS[index]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+              <div className="chart-box">
+                <h3 className="sub-heading">Status Comparison</h3>
+                {loadingData ? (
+                  <SkeletonBox height={250} />
+                ) : (
+                  <div className="responsive-chart-container">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={chartData}>
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#2563eb" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* ...existing code... */}
+
+
+
+          {/* OVERDUE ISSUES */}
+          <div className="overdue-section animated-overdue">
+            <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <h2 className="section-title" style={{ color: '#dc2626' }}>⚠ Overdue Tasks</h2>
+            </div>
             {loadingData ? (
-              <SkeletonBox height={250} />
+              <>
+                <div className="skeleton-row" style={{ height: 32, marginBottom: 8 }}></div>
+                <div className="skeleton-row" style={{ height: 32, marginBottom: 8 }}></div>
+              </>
+            ) : overdueIssues.length === 0 ? (
+              <p className="no-issues">No overdue issues.</p>
             ) : (
-              <div className="responsive-chart-container">
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={chartData} dataKey="value" outerRadius={80}>
-                      {chartData.map((entry, index) => (
-                        <Cell key={index} fill={COLORS[index]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="overdue-grid overdue-scroll">
+                {overdueIssues.map(i => (
+                  <div key={i.id} className="overdue-card animated-overdue-card">
+                    <p><b>Street:</b> {i.street}</p>
+                    <p><b>Deadline:</b> <span style={{ color: '#dc2626' }}>{i.deadline}</span></p>
+                    <p style={{ fontWeight: 600, color: '#64748b' }}>{label(i.category)}</p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-          <div className="chart-box">
-            <h3 className="sub-heading">Status Comparison</h3>
-            {loadingData ? (
-              <SkeletonBox height={250} />
-            ) : (
-              <div className="responsive-chart-container">
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={chartData}>
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#2563eb" />
-                  </BarChart>
-                </ResponsiveContainer>
+
+
+
+          {/* ASSIGNED WRAPPER */}
+          <div className="issue-group assigned-group">
+            <Carousel
+              title="Assigned Issues"
+              issues={assignedIssues}
+              loading={loadingData}
+              highlight
+            />
+          </div>
+
+          {/* IN PROGRESS WRAPPER */}
+          <div className="issue-group progress-group">
+            <Carousel
+              title="In Progress Issues"
+              issues={progressIssues}
+              loading={loadingData}
+              highlight
+            />
+          </div>
+
+          {/* CATEGORY CARDS */}
+          <div className="raise-wrapper">
+
+            <div className="category-section">
+
+              <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <h2 className="section-title highlight">Reported Issues</h2>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-      {/* ...existing code... */}
 
-
-
-      {/* OVERDUE ISSUES */}
-      <div className="overdue-section animated-overdue">
-        <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <h2 className="section-title" style={{ color: '#dc2626' }}>⚠ Overdue Tasks</h2>
-        </div>
-        {loadingData ? (
-          <>
-            <div className="skeleton-row" style={{ height: 32, marginBottom: 8 }}></div>
-            <div className="skeleton-row" style={{ height: 32, marginBottom: 8 }}></div>
-          </>
-        ) : overdueIssues.length === 0 ? (
-          <p className="no-issues">No overdue issues.</p>
-        ) : (
-          <div className="overdue-grid overdue-scroll">
-            {overdueIssues.map(i => (
-              <div key={i.id} className="overdue-card animated-overdue-card">
-                <p><b>Street:</b> {i.street}</p>
-                <p><b>Deadline:</b> <span style={{ color: '#dc2626' }}>{i.deadline}</span></p>
-                <p style={{ fontWeight: 600, color: '#64748b' }}>{label(i.category)}</p>
+              <div className="category-cards">
+                {['electricity', 'water', 'garbage', 'drainage'].map(cat => (
+                  <div
+                    key={cat}
+                    className={`category-card${activeCategory === cat ? ' active' : ''}`}
+                    onClick={() => { setActiveCategory(cat); fetchIssues(cat) }}
+                    style={{ position: 'relative' }}
+                  >
+                    {label(cat)}
+                    {pendingCounts[cat] > 0 && <span className="notification-dot"></span>}
+                  </div>
+                ))}
               </div>
-            ))}
+
+            </div> {/* category-section */}
+
+          </div> {/* raise-wrapper */}
+
+
+          {/* CATEGORY ISSUES */}
+
+          <div className="issue-section">
+            {activeCategory && renderIssues()}
           </div>
-        )}
-      </div>
-
-
-
-      {/* ASSIGNED WRAPPER */}
-      <div className="issue-group assigned-group">
-        <Carousel
-          title="Assigned Issues"
-          issues={assignedIssues}
-          loading={loadingData}
-          highlight
-        />
-      </div>
-
-      {/* IN PROGRESS WRAPPER */}
-      <div className="issue-group progress-group">
-        <Carousel
-          title="In Progress Issues"
-          issues={progressIssues}
-          loading={loadingData}
-          highlight
-        />
-      </div>
-
-      {/* CATEGORY CARDS */}
-      <div className="raise-wrapper">
-
-        <div className="category-section">
-
-          <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <h2 className="section-title highlight">Reported Issues</h2>
-          </div>
-
-          <div className="category-cards">
-            {['electricity', 'water', 'garbage', 'drainage'].map(cat => (
-              <div
-                key={cat}
-                className={`category-card${activeCategory === cat ? ' active' : ''}`}
-                onClick={() => { setActiveCategory(cat); fetchIssues(cat) }}
-                style={{ position: 'relative' }}
-              >
-                {label(cat)}
-                {pendingCounts[cat] > 0 && <span className="notification-dot"></span>}
-              </div>
-            ))}
-          </div>
-
-        </div> {/* category-section */}
-
-      </div> {/* raise-wrapper */}
-
-
-      {/* CATEGORY ISSUES */}
-
-      <div className="issue-section">
-        {activeCategory && renderIssues()}
-      </div>
         </>
       )}
 
@@ -1450,7 +1450,7 @@ export default function AdminDashboard() {
                                 src={getImageUrl(issue.photo)}
                                 alt="before"
                                 style={{ width: "90px", height: "70px", objectFit: "cover", borderRadius: "6px", marginTop: "2px" }}
-                                onError={e => e.target.style.display="none"}
+                                onError={e => e.target.style.display = "none"}
                               />
                             </div>
                           )}
@@ -1462,7 +1462,7 @@ export default function AdminDashboard() {
                                 src={getImageUrl(asgn.completion_photo)}
                                 alt="after"
                                 style={{ width: "90px", height: "70px", objectFit: "cover", borderRadius: "6px", marginTop: "2px", border: "2px solid #10b981" }}
-                                onError={e => e.target.style.display="none"}
+                                onError={e => e.target.style.display = "none"}
                               />
                             </div>
                           )}
@@ -1804,3 +1804,5 @@ export default function AdminDashboard() {
   );
 
 }
+
+// nsdannn
